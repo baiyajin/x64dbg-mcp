@@ -1,0 +1,7 @@
+{
+  "entrypoint": "main.py",
+  "environment": {
+    "dependencies": ["requests", "fastmcp", "aiohttp"]
+  }
+}
+
