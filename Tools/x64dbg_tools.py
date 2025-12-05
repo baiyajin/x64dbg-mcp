@@ -2173,6 +2173,84 @@ except Exception as e:
                 "status": "error",
                 "message": f"获取配置列表失败: {str(e)}"
             }
+    
+    # ========== 性能分析功能 ==========
+    
+    def start_profiling(self) -> Dict[str, Any]:
+        """开始性能分析"""
+        try:
+            profile_script = """# X64Dbg Start Profiling Script
+try:
+    import dbg
+    import time
+    
+    # 开始性能分析
+    if hasattr(dbg, 'startProfiling'):
+        result = dbg.startProfiling()
+        start_time = time.time()
+        print(f"MCP_RESULT:{{'status':'success','message':'性能分析已开始','start_time':start_time}}")
+    else:
+        result = dbgcmd('profile')
+        print(f"MCP_RESULT:{{'status':'success','message':'性能分析已开始','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(profile_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"开始性能分析失败: {str(e)}"
+            }
+    
+    def stop_profiling(self) -> Dict[str, Any]:
+        """停止性能分析"""
+        try:
+            stop_script = """# X64Dbg Stop Profiling Script
+try:
+    import dbg
+    import time
+    
+    # 停止性能分析
+    if hasattr(dbg, 'stopProfiling'):
+        result = dbg.stopProfiling()
+        stop_time = time.time()
+        print(f"MCP_RESULT:{{'status':'success','message':'性能分析已停止','stop_time':stop_time}}")
+    else:
+        result = dbgcmd('profilestop')
+        print(f"MCP_RESULT:{{'status':'success','message':'性能分析已停止','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(stop_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"停止性能分析失败: {str(e)}"
+            }
+    
+    def get_profiling_results(self) -> Dict[str, Any]:
+        """获取性能分析结果"""
+        try:
+            results_script = """# X64Dbg Get Profiling Results Script
+try:
+    import dbg
+    
+    # 获取性能分析结果
+    if hasattr(dbg, 'getProfilingResults'):
+        results = dbg.getProfilingResults()
+        print(f"MCP_RESULT:{{'status':'success','results':results}}")
+    else:
+        result = dbgcmd('profilelist')
+        print(f"MCP_RESULT:{{'status':'success','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(results_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"获取性能分析结果失败: {str(e)}"
+            }
 
 
 # 全局控制器实例
@@ -3715,4 +3793,45 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"获取配置列表失败: {str(e)}"}
+    
+    # ========== 性能分析功能 ==========
+    
+    @mcp.tool('x64dbg_start_profiling', description='开始性能分析')
+    async def start_profiling():
+        """
+        开始性能分析（记录执行时间和热点）
+        
+        :return: 开始分析结果
+        """
+        try:
+            result = controller.start_profiling()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"开始性能分析失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_stop_profiling', description='停止性能分析')
+    async def stop_profiling():
+        """
+        停止性能分析
+        
+        :return: 停止分析结果
+        """
+        try:
+            result = controller.stop_profiling()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"停止性能分析失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_profiling_results', description='获取性能分析结果')
+    async def get_profiling_results():
+        """
+        获取性能分析结果（执行时间、热点函数等）
+        
+        :return: 性能分析结果
+        """
+        try:
+            result = controller.get_profiling_results()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取性能分析结果失败: {str(e)}"}
 
