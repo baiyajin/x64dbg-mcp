@@ -2070,6 +2070,109 @@ except Exception as e:
                 "status": "error",
                 "message": f"获取脚本历史失败: {str(e)}"
             }
+    
+    # ========== 配置管理功能 ==========
+    
+    def save_config(self, config_name: str) -> Dict[str, Any]:
+        """
+        保存当前调试配置
+        
+        :param config_name: 配置名称
+        """
+        if not config_name or config_name.strip() == "":
+            raise ValueError('配置名称不能为空!')
+        
+        try:
+            config_dir = os.path.join(self.temp_script_dir, "configs")
+            if not os.path.exists(config_dir):
+                os.makedirs(config_dir, exist_ok=True)
+            
+            config_file = os.path.join(config_dir, f"{config_name}.json")
+            
+            # 收集当前配置信息
+            config_data = {
+                "name": config_name,
+                "breakpoints": self.get_breakpoints(),
+                "bookmarks": self.get_bookmarks(),
+                "patches": self.get_patches(),
+                "modules": self.get_modules(),
+                "timestamp": __import__('time').time()
+            }
+            
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, indent=2, ensure_ascii=False)
+            
+            return {
+                "status": "success",
+                "config_name": config_name,
+                "config_file": config_file,
+                "message": f"配置已保存: {config_name}"
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"保存配置失败: {str(e)}"
+            }
+    
+    def load_config(self, config_name: str) -> Dict[str, Any]:
+        """
+        加载调试配置
+        
+        :param config_name: 配置名称
+        """
+        if not config_name or config_name.strip() == "":
+            raise ValueError('配置名称不能为空!')
+        
+        try:
+            config_dir = os.path.join(self.temp_script_dir, "configs")
+            config_file = os.path.join(config_dir, f"{config_name}.json")
+            
+            if not os.path.exists(config_file):
+                raise FileNotFoundError(f"配置文件不存在: {config_file}")
+            
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+            
+            return {
+                "status": "success",
+                "config_name": config_name,
+                "config_data": config_data,
+                "message": f"配置已加载: {config_name}"
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"加载配置失败: {str(e)}"
+            }
+    
+    def list_configs(self) -> Dict[str, Any]:
+        """获取所有配置列表"""
+        try:
+            config_dir = os.path.join(self.temp_script_dir, "configs")
+            configs = []
+            
+            if os.path.exists(config_dir):
+                files = [f for f in os.listdir(config_dir) if f.endswith('.json')]
+                for f in files:
+                    config_file = os.path.join(config_dir, f)
+                    config_name = os.path.splitext(f)[0]
+                    configs.append({
+                        "name": config_name,
+                        "file_path": config_file,
+                        "modified_time": os.path.getmtime(config_file),
+                        "size": os.path.getsize(config_file)
+                    })
+            
+            return {
+                "status": "success",
+                "count": len(configs),
+                "configs": configs
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"获取配置列表失败: {str(e)}"
+            }
 
 
 # 全局控制器实例
@@ -3563,4 +3666,53 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"获取脚本历史失败: {str(e)}"}
+    
+    # ========== 配置管理功能 ==========
+    
+    @mcp.tool('x64dbg_save_config', description='保存当前调试配置')
+    async def save_config(config_name: str):
+        """
+        保存当前调试配置（断点、书签、补丁等）
+        
+        :param config_name: 配置名称
+        :return: 保存结果
+        """
+        if not config_name or config_name.strip() == "":
+            raise ValueError('配置名称不能为空!')
+        
+        try:
+            result = controller.save_config(config_name)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"保存配置失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_load_config', description='加载调试配置')
+    async def load_config(config_name: str):
+        """
+        加载之前保存的调试配置
+        
+        :param config_name: 配置名称
+        :return: 配置数据
+        """
+        if not config_name or config_name.strip() == "":
+            raise ValueError('配置名称不能为空!')
+        
+        try:
+            result = controller.load_config(config_name)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"加载配置失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_list_configs', description='获取所有配置列表')
+    async def list_configs():
+        """
+        获取所有已保存的配置列表
+        
+        :return: 配置列表
+        """
+        try:
+            result = controller.list_configs()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取配置列表失败: {str(e)}"}
 
