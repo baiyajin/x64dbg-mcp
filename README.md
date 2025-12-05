@@ -748,6 +748,15 @@ Tools/
   <p><em>你的鼓励是我改BUG的动力 💪</em></p>
 </div>
 
+## 技术支持
+
+遇到问题需要帮助？欢迎加入付费技术支持咨询交流微信群，与开发者和其他用户交流！
+
+<div align="center">
+  <img src="wechat_group.jpg" alt="付费技术支持咨询交流微信群" width="300">
+  <p><em>扫码加入微信群，获取技术支持 💬</em></p>
+</div>
+
 ## 相关链接
 
 - [x64dbg官网](https://x64dbg.com/)
