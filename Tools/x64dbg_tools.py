@@ -543,6 +543,122 @@ except Exception as e:
         """获取线程列表"""
         return self.execute_command("thread")
     
+    def switch_thread(self, thread_id: int) -> Dict[str, Any]:
+        """
+        切换当前线程
+        
+        :param thread_id: 线程ID（TID）
+        """
+        try:
+            switch_script = f"""# X64Dbg Switch Thread Script
+try:
+    import dbg
+    tid = {thread_id}
+    
+    # 切换线程
+    if hasattr(dbg, 'switchThread'):
+        result = dbg.switchThread(tid)
+        print(f"MCP_RESULT:{{'status':'success','thread_id':{thread_id},'result':result}}")
+    else:
+        result = dbgcmd(f'thread {{tid}}')
+        print(f"MCP_RESULT:{{'status':'success','thread_id':{thread_id},'result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(switch_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"切换线程失败: {str(e)}"
+            }
+    
+    def suspend_thread(self, thread_id: int) -> Dict[str, Any]:
+        """
+        挂起线程
+        
+        :param thread_id: 线程ID（TID）
+        """
+        try:
+            suspend_script = f"""# X64Dbg Suspend Thread Script
+try:
+    import dbg
+    tid = {thread_id}
+    
+    # 挂起线程
+    if hasattr(dbg, 'suspendThread'):
+        result = dbg.suspendThread(tid)
+        print(f"MCP_RESULT:{{'status':'success','thread_id':{thread_id},'result':result}}")
+    else:
+        result = dbgcmd(f'threadsuspend {{tid}}')
+        print(f"MCP_RESULT:{{'status':'success','thread_id':{thread_id},'result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(suspend_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"挂起线程失败: {str(e)}"
+            }
+    
+    def resume_thread(self, thread_id: int) -> Dict[str, Any]:
+        """
+        恢复线程
+        
+        :param thread_id: 线程ID（TID）
+        """
+        try:
+            resume_script = f"""# X64Dbg Resume Thread Script
+try:
+    import dbg
+    tid = {thread_id}
+    
+    # 恢复线程
+    if hasattr(dbg, 'resumeThread'):
+        result = dbg.resumeThread(tid)
+        print(f"MCP_RESULT:{{'status':'success','thread_id':{thread_id},'result':result}}")
+    else:
+        result = dbgcmd(f'threadresume {{tid}}')
+        print(f"MCP_RESULT:{{'status':'success','thread_id':{thread_id},'result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(resume_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"恢复线程失败: {str(e)}"
+            }
+    
+    def get_thread_context(self, thread_id: int) -> Dict[str, Any]:
+        """
+        获取线程上下文
+        
+        :param thread_id: 线程ID（TID）
+        """
+        try:
+            context_script = f"""# X64Dbg Get Thread Context Script
+try:
+    import dbg
+    tid = {thread_id}
+    
+    # 获取线程上下文
+    if hasattr(dbg, 'getThreadContext'):
+        context = dbg.getThreadContext(tid)
+        print(f"MCP_RESULT:{{'status':'success','thread_id':{thread_id},'context':{{context}}}}")
+    else:
+        result = dbgcmd(f'threadcontext {{tid}}')
+        print(f"MCP_RESULT:{{'status':'success','thread_id':{thread_id},'result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(context_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"获取线程上下文失败: {str(e)}"
+            }
+    
     def get_breakpoints(self) -> Dict[str, Any]:
         """获取所有断点列表"""
         return self.execute_command("bplist")
@@ -1822,6 +1938,74 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"获取线程列表失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_switch_thread', description='切换当前线程')
+    async def switch_thread(thread_id: int):
+        """
+        切换当前线程
+        
+        :param thread_id: 线程ID（TID）
+        :return: 切换结果
+        """
+        if thread_id <= 0:
+            raise ValueError('线程ID必须大于0!')
+        
+        try:
+            result = controller.switch_thread(thread_id)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"切换线程失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_suspend_thread', description='挂起线程')
+    async def suspend_thread(thread_id: int):
+        """
+        挂起线程（暂停线程执行）
+        
+        :param thread_id: 线程ID（TID）
+        :return: 挂起结果
+        """
+        if thread_id <= 0:
+            raise ValueError('线程ID必须大于0!')
+        
+        try:
+            result = controller.suspend_thread(thread_id)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"挂起线程失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_resume_thread', description='恢复线程')
+    async def resume_thread(thread_id: int):
+        """
+        恢复线程（继续线程执行）
+        
+        :param thread_id: 线程ID（TID）
+        :return: 恢复结果
+        """
+        if thread_id <= 0:
+            raise ValueError('线程ID必须大于0!')
+        
+        try:
+            result = controller.resume_thread(thread_id)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"恢复线程失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_thread_context', description='获取线程上下文')
+    async def get_thread_context(thread_id: int):
+        """
+        获取线程上下文（寄存器、堆栈等信息）
+        
+        :param thread_id: 线程ID（TID）
+        :return: 线程上下文信息
+        """
+        if thread_id <= 0:
+            raise ValueError('线程ID必须大于0!')
+        
+        try:
+            result = controller.get_thread_context(thread_id)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取线程上下文失败: {str(e)}"}
     
     @mcp.tool('x64dbg_get_breakpoints', description='获取所有断点列表')
     async def get_breakpoints():
