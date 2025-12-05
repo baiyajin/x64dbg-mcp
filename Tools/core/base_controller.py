@@ -22,8 +22,44 @@ class BaseController:
         self.x64dbg_path = config.X64DBG_PATH
         self.plugin_dir = config.X64DBG_PLUGIN_DIR
         self.is_connected = False
-        self.script_executor = ScriptExecutor(self.plugin_dir)
+        self.x64dbg_installed = config.X64DBG_INSTALLED
+        
+        # 如果x64dbg未安装，使用系统临时目录作为脚本目录
+        if not self.x64dbg_installed:
+            import tempfile
+            self.plugin_dir = tempfile.gettempdir()
+            self.script_executor = ScriptExecutor(self.plugin_dir)
+        else:
+            self.script_executor = ScriptExecutor(self.plugin_dir)
+        
         self.result_parser = ResultParser()
+    
+    def _check_x64dbg_installed(self) -> Dict[str, Any]:
+        """
+        检查x64dbg是否已安装
+        如果未安装，返回错误信息
+        
+        :return: 如果未安装返回错误字典，否则返回None
+        """
+        if not self.x64dbg_installed:
+            return {
+                "status": "error",
+                "message": (
+                    "x64dbg未安装或路径未配置。\n\n"
+                    "请执行以下操作之一：\n"
+                    "1. 安装x64dbg到默认位置（C:\\Program Files\\x64dbg\\release\\x64\\）\n"
+                    "2. 编辑项目根目录下的config.py文件，设置正确的DEFAULT_X64DBG_PATH\n"
+                    "3. 设置环境变量X64DBG_PATH指向x64dbg.exe的完整路径\n\n"
+                    f"当前检测到的路径: {config.X64DBG_PATH or '未找到'}\n"
+                    "系统已尝试检测以下路径但未找到：\n"
+                    "- D:\\baiyajin-code\\x64dbg\\release\\x64\\x64dbg.exe\n"
+                    "- C:\\Program Files\\x64dbg\\release\\x64\\x64dbg.exe\n"
+                    "- C:\\x64dbg\\release\\x64\\x64dbg.exe\n"
+                    "- 以及其他常见位置"
+                ),
+                "error_code": "X64DBG_NOT_INSTALLED"
+            }
+        return None
     
     def execute_command(self, command: str, auto_execute: bool = True, parse_result: bool = True) -> Dict[str, Any]:
         """
@@ -36,6 +72,11 @@ class BaseController:
         :param parse_result: 是否解析执行结果（默认True）
         :return: 执行结果
         """
+        # 检查x64dbg是否安装
+        check_result = self._check_x64dbg_installed()
+        if check_result:
+            return check_result
+        
         try:
             # 转义命令中的特殊字符
             escaped_command = command.replace("'", "\\'").replace('"', '\\"')

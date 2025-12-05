@@ -64,12 +64,57 @@ uv pip install -r requirements.txt
 
 ### 2. 配置x64dbg路径
 
-编辑 `config.py`，设置正确的x64dbg安装路径：
+#### 方法一：自动检测（推荐）
+
+系统会自动检测以下常见路径：
+- `D:\baiyajin-code\x64dbg\release\x64\x64dbg.exe` (开发环境)
+- `C:\Program Files\x64dbg\release\x64\x64dbg.exe` (标准安装)
+- `C:\Program Files (x86)\x64dbg\release\x64\x64dbg.exe` (32位系统)
+- `%USERPROFILE%\x64dbg\release\x64\x64dbg.exe` (用户目录)
+- `C:\x64dbg\release\x64\x64dbg.exe` (其他常见位置)
+- `D:\x64dbg\release\x64\x64dbg.exe` (其他常见位置)
+- 以及其他常见位置
+
+如果x64dbg安装在上述位置之一，**无需额外配置**，系统会自动检测并使用。
+
+#### 方法二：手动配置
+
+如果x64dbg安装在其他位置，编辑 `config.py`，修改以下行：
 
 ```python
-X64DBG_PATH = r"C:\Program Files\x64dbg\release\x64\x64dbg.exe"
-X64DBG_PLUGIN_DIR = r"C:\Program Files\x64dbg\release\x64\plugins"
+DEFAULT_X64DBG_PATH = r"你的x64dbg路径\x64dbg.exe"
+DEFAULT_X64DBG_PLUGIN_DIR = r"你的x64dbg路径\plugins"
 ```
+
+例如：
+```python
+DEFAULT_X64DBG_PATH = r"D:\MyTools\x64dbg\release\x64\x64dbg.exe"
+DEFAULT_X64DBG_PLUGIN_DIR = r"D:\MyTools\x64dbg\release\x64\plugins"
+```
+
+#### 方法三：环境变量
+
+设置环境变量 `X64DBG_PATH` 指向x64dbg.exe的完整路径：
+
+**Windows PowerShell:**
+```powershell
+$env:X64DBG_PATH = "D:\baiyajin-code\x64dbg\release\x64\x64dbg.exe"
+```
+
+**Windows CMD:**
+```cmd
+set X64DBG_PATH=D:\baiyajin-code\x64dbg\release\x64\x64dbg.exe
+```
+
+**永久设置（系统环境变量）:**
+1. 右键"此电脑" -> "属性" -> "高级系统设置" -> "环境变量"
+2. 在"用户变量"或"系统变量"中添加：
+   - 变量名：`X64DBG_PATH`
+   - 变量值：`D:\baiyajin-code\x64dbg\release\x64\x64dbg.exe`
+
+#### 验证配置
+
+启动MCP服务器后，如果x64dbg未安装或路径错误，工具调用时会返回清晰的错误提示，指导用户如何配置。MCP服务器本身可以正常启动，只有在调用工具时才会提示需要配置x64dbg路径。
 
 ### 3. 安装x64dbg Python插件
 
