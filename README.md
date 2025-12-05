@@ -27,6 +27,10 @@ X64Dbg的Model Context Protocol服务器，用于AI辅助逆向分析和调试�
 - ✅ 代码注入（Shellcode注入）
 - ✅ DLL注入/卸载
 - ✅ 反调试绕过
+- ✅ 异常处理设置
+- ✅ 文件操作（加载/保存）
+- ✅ 内存比较和填充
+- ✅ 地址计算和格式化工具
 
 ## 安装
 
@@ -404,6 +408,30 @@ Cursor支持通过项目配置文件或全局配置文件来设置MCP服务器�
 
 ### x64dbg_bypass_antidebug
 绕过反调试检测（修改PEB标志、绕过NtQuery等）
+
+### x64dbg_set_exception_handler
+设置异常处理（忽略/中断/记录特定异常）
+
+### x64dbg_get_exception_info
+获取当前异常信息
+
+### x64dbg_load_file
+加载文件到调试器
+
+### x64dbg_save_memory_to_file
+保存内存到文件
+
+### x64dbg_compare_memory
+比较两处内存内容（查找差异）
+
+### x64dbg_fill_memory
+填充内存（用指定值填充内存区域）
+
+### x64dbg_calculate_address
+计算地址（基址+偏移）
+
+### x64dbg_format_address
+格式化地址（十六进制/十进制转换）
 
 ## 注意事项
 

@@ -1011,6 +1011,235 @@ except Exception as e:
                 "status": "error",
                 "message": f"反调试绕过失败: {str(e)}"
             }
+    
+    # ========== 增强功能 ==========
+    
+    def set_exception_handler(self, exception_code: int, action: str = "ignore") -> Dict[str, Any]:
+        """
+        设置异常处理
+        
+        :param exception_code: 异常代码（如: 0xC0000005为访问违例）
+        :param action: 处理动作，可选值: "ignore"（忽略）, "break"（中断）, "log"（记录）
+        """
+        try:
+            exception_script = f"""# X64Dbg Exception Handler Script
+try:
+    import dbg
+    exc_code = 0x{exception_code:08X}
+    action = '{action}'
+    
+    # 设置异常处理
+    if hasattr(dbg, 'setExceptionHandler'):
+        result = dbg.setExceptionHandler(exc_code, action)
+        print(f"MCP_RESULT:{{'status':'success','exception_code':hex(exc_code),'action':'{action}','result':result}}")
+    else:
+        # 尝试通过命令设置
+        result = dbgcmd(f'exception {{exc_code}}, {{action}}')
+        print(f"MCP_RESULT:{{'status':'success','exception_code':hex(exc_code),'action':'{action}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(exception_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"设置异常处理失败: {str(e)}"
+            }
+    
+    def get_exception_info(self) -> Dict[str, Any]:
+        """获取当前异常信息"""
+        return self.execute_command("exception")
+    
+    def load_file(self, file_path: str) -> Dict[str, Any]:
+        """
+        加载文件到调试器
+        
+        :param file_path: 文件路径
+        """
+        try:
+            load_script = f"""# X64Dbg Load File Script
+try:
+    import dbg
+    import os
+    file_path = r"{file_path}"
+    
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"文件不存在: {{file_path}}")
+    
+    # 加载文件
+    if hasattr(dbg, 'loadFile'):
+        result = dbg.loadFile(file_path)
+        print(f"MCP_RESULT:{{'status':'success','file_path':'{file_path}','result':result}}")
+    else:
+        result = dbgcmd(f'open {{file_path}}')
+        print(f"MCP_RESULT:{{'status':'success','file_path':'{file_path}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(load_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"加载文件失败: {str(e)}"
+            }
+    
+    def save_memory_to_file(self, address: str, size: int, output_file: str) -> Dict[str, Any]:
+        """
+        保存内存到文件
+        
+        :param address: 起始地址
+        :param size: 大小
+        :param output_file: 输出文件路径
+        """
+        # 使用已有的dump_memory功能
+        return self.dump_memory(address, size, output_file)
+    
+    def compare_memory(self, address1: str, address2: str, size: int) -> Dict[str, Any]:
+        """
+        比较两处内存内容
+        
+        :param address1: 第一个地址
+        :param address2: 第二个地址
+        :param size: 比较大小
+        """
+        address1 = address1.strip().replace(" ", "")
+        address2 = address2.strip().replace(" ", "")
+        
+        try:
+            compare_script = f"""# X64Dbg Memory Compare Script
+try:
+    import dbg
+    addr1 = int('{address1}', 16) if '{address1}'.startswith('0x') else int('{address1}')
+    addr2 = int('{address2}', 16) if '{address2}'.startswith('0x') else int('{address2}')
+    size = {size}
+    
+    # 读取两处内存
+    mem1 = dbg.read(addr1, size)
+    mem2 = dbg.read(addr2, size)
+    
+    # 比较
+    differences = []
+    for i in range(size):
+        if mem1[i] != mem2[i]:
+            differences.append({{
+                'offset': i,
+                'address1': hex(addr1 + i),
+                'address2': hex(addr2 + i),
+                'value1': hex(mem1[i]),
+                'value2': hex(mem2[i])
+            }})
+    
+    result = {{
+        'identical': len(differences) == 0,
+        'total_bytes': size,
+        'differences_count': len(differences),
+        'differences': differences[:100]  # 限制返回前100个差异
+    }}
+    print(f"MCP_RESULT:{{'status':'success','result':{{result}}}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(compare_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"内存比较失败: {str(e)}"
+            }
+    
+    def fill_memory(self, address: str, size: int, value: int) -> Dict[str, Any]:
+        """
+        填充内存
+        
+        :param address: 起始地址
+        :param size: 大小
+        :param value: 填充值（0-255）
+        """
+        address = address.strip().replace(" ", "")
+        
+        if value < 0 or value > 255:
+            raise ValueError('填充值必须在0-255之间!')
+        
+        try:
+            fill_script = f"""# X64Dbg Memory Fill Script
+try:
+    import dbg
+    addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    size = {size}
+    fill_value = {value}
+    
+    # 填充内存
+    fill_data = bytes([fill_value] * size)
+    dbg.write(addr, fill_data)
+    
+    print(f"MCP_RESULT:{{'status':'success','address':'{address}','size':{size},'value':{value}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(fill_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"内存填充失败: {str(e)}"
+            }
+    
+    def calculate_address(self, base_address: str, offset: int) -> Dict[str, Any]:
+        """
+        计算地址（基址+偏移）
+        
+        :param base_address: 基址
+        :param offset: 偏移量（可以是负数）
+        """
+        base_address = base_address.strip().replace(" ", "")
+        
+        try:
+            base = int(base_address, 16) if base_address.startswith('0x') else int(base_address)
+            result_addr = base + offset
+            
+            return {
+                "status": "success",
+                "base_address": base_address,
+                "offset": offset,
+                "result_address": hex(result_addr),
+                "result_address_decimal": result_addr
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"地址计算失败: {str(e)}"
+            }
+    
+    def format_address(self, address: str, format_type: str = "hex") -> Dict[str, Any]:
+        """
+        格式化地址
+        
+        :param address: 地址（可以是十六进制或十进制字符串）
+        :param format_type: 格式类型: "hex", "decimal", "both"
+        """
+        address = address.strip().replace(" ", "")
+        
+        try:
+            # 尝试解析地址
+            if address.startswith('0x') or address.startswith('0X'):
+                addr_value = int(address, 16)
+            else:
+                addr_value = int(address)
+            
+            result = {}
+            if format_type in ["hex", "both"]:
+                result["hex"] = hex(addr_value)
+            if format_type in ["decimal", "both"]:
+                result["decimal"] = addr_value
+            
+            return {
+                "status": "success",
+                "original": address,
+                "formatted": result
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"地址格式化失败: {str(e)}"
+            }
 
 
 # 全局控制器实例
@@ -1835,4 +2064,170 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"反调试绕过失败: {str(e)}"}
+    
+    # ========== 增强功能 ==========
+    
+    @mcp.tool('x64dbg_set_exception_handler', description='设置异常处理')
+    async def set_exception_handler(exception_code: int, action: str = "ignore"):
+        """
+        设置异常处理
+        
+        :param exception_code: 异常代码（十六进制，如: 0xC0000005为访问违例）
+        :param action: 处理动作，可选值: "ignore"（忽略）, "break"（中断）, "log"（记录）
+        :return: 设置结果
+        """
+        valid_actions = ["ignore", "break", "log"]
+        if action.lower() not in valid_actions:
+            raise ValueError(f'处理动作必须是以下之一: {", ".join(valid_actions)}')
+        
+        try:
+            result = controller.set_exception_handler(exception_code, action.lower())
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"设置异常处理失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_exception_info', description='获取当前异常信息')
+    async def get_exception_info():
+        """
+        获取当前异常信息
+        
+        :return: 异常信息
+        """
+        try:
+            result = controller.get_exception_info()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取异常信息失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_load_file', description='加载文件到调试器')
+    async def load_file(file_path: str):
+        """
+        加载文件到调试器
+        
+        :param file_path: 文件完整路径
+        :return: 加载结果
+        """
+        if not file_path or file_path.strip() == "":
+            raise ValueError('文件路径不能为空!')
+        
+        try:
+            result = controller.load_file(file_path)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"加载文件失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_save_memory_to_file', description='保存内存到文件')
+    async def save_memory_to_file(address: str, size: int, output_file: str):
+        """
+        保存内存到文件
+        
+        :param address: 起始地址，十六进制格式(0x401000)
+        :param size: 大小（字节），最大10MB
+        :param output_file: 输出文件路径
+        :return: 保存结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        if size <= 0 or size > 10 * 1024 * 1024:
+            raise ValueError('大小必须在1字节到10MB之间!')
+        
+        if not output_file or output_file.strip() == "":
+            raise ValueError('输出文件路径不能为空!')
+        
+        try:
+            result = controller.save_memory_to_file(address, size, output_file)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"保存内存失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_compare_memory', description='比较两处内存内容')
+    async def compare_memory(address1: str, address2: str, size: int):
+        """
+        比较两处内存内容
+        
+        :param address1: 第一个地址，十六进制格式(0x401000)
+        :param address2: 第二个地址，十六进制格式(0x402000)
+        :param size: 比较大小（字节），最大1MB
+        :return: 比较结果，包含差异列表
+        """
+        if not address1 or address1.strip() == "":
+            raise ValueError('第一个地址不能为空!')
+        
+        if not address2 or address2.strip() == "":
+            raise ValueError('第二个地址不能为空!')
+        
+        if size <= 0 or size > 1024 * 1024:
+            raise ValueError('比较大小必须在1字节到1MB之间!')
+        
+        try:
+            result = controller.compare_memory(address1, address2, size)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"内存比较失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_fill_memory', description='填充内存')
+    async def fill_memory(address: str, size: int, value: int):
+        """
+        填充内存
+        
+        :param address: 起始地址，十六进制格式(0x401000)
+        :param size: 大小（字节），最大1MB
+        :param value: 填充值（0-255）
+        :return: 填充结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        if size <= 0 or size > 1024 * 1024:
+            raise ValueError('大小必须在1字节到1MB之间!')
+        
+        if value < 0 or value > 255:
+            raise ValueError('填充值必须在0-255之间!')
+        
+        try:
+            result = controller.fill_memory(address, size, value)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"内存填充失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_calculate_address', description='计算地址（基址+偏移）')
+    async def calculate_address(base_address: str, offset: int):
+        """
+        计算地址（基址+偏移）
+        
+        :param base_address: 基址，十六进制格式(0x401000)或十进制
+        :param offset: 偏移量（可以是负数）
+        :return: 计算结果
+        """
+        if not base_address or base_address.strip() == "":
+            raise ValueError('基址不能为空!')
+        
+        try:
+            result = controller.calculate_address(base_address, offset)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"地址计算失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_format_address', description='格式化地址')
+    async def format_address(address: str, format_type: str = "hex"):
+        """
+        格式化地址
+        
+        :param address: 地址（可以是十六进制或十进制字符串）
+        :param format_type: 格式类型: "hex"（十六进制）, "decimal"（十进制）, "both"（两者）
+        :return: 格式化结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        valid_formats = ["hex", "decimal", "both"]
+        if format_type.lower() not in valid_formats:
+            raise ValueError(f'格式类型必须是以下之一: {", ".join(valid_formats)}')
+        
+        try:
+            result = controller.format_address(address, format_type.lower())
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"地址格式化失败: {str(e)}"}
 
