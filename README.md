@@ -697,6 +697,22 @@ Tools/
    ```
 3. 如果使用虚拟环境，确保激活虚拟环境或使用虚拟环境的Python路径
 
+## 更新日志
+
+查看完整的提交历史：[Git提交记录](https://github.com/baiyajin/x64dbg-mcp/commits/main)
+
+### 最近更新
+
+- ✅ **docs: 移除已完成的开发计划部分** - 清理README，移除已完成的功能列表
+- ✅ **chore: 优化FastMCP日志输出配置** - 减少日志输出，优化启动体验
+- ✅ **feat: 添加智能x64dbg路径检测** - 支持自动检测x64dbg安装路径，未安装时提供友好提示
+- ✅ **docs: 在README中添加项目logo** - 添加项目logo展示
+- ✅ **修复: 解决异常消息中的中文乱码问题** - 修复编码问题，确保中文正确显示
+- ✅ **修复: 解决日志乱码问题** - 配置UTF-8编码，解决日志输出乱码
+- ✅ **修复: 解决MCP协议JSON解析错误问题** - 修复f-string语法错误
+- ✅ **重构: 拆分大文件使其符合200行限制** - 模块化重构，遵循单一职责原则
+- ✅ **配置: 添加Cursor MCP服务器配置文件** - 添加MCP服务器配置示例
+
 ## 许可证
 
 本项目采用MIT许可证。
@@ -711,4 +727,6 @@ Tools/
 - [Model Context Protocol文档](https://modelcontextprotocol.io/)
 - [FastMCP文档](https://github.com/jlowin/fastmcp)
 - [Cursor MCP文档](https://docs.cursor.com/context/mcp)
+- [Git提交历史](https://github.com/baiyajin/x64dbg-mcp/commits/main)
+- [GitHub仓库](https://github.com/baiyajin/x64dbg-mcp)
 
