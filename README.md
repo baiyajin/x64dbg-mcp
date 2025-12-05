@@ -275,6 +275,53 @@ Cursor支持通过项目配置文件或全局配置文件来设置MCP服务器�
 - 如果不在x64dbg环境中，脚本会保存到文件，等待手动加载
 - 所有命令默认启用自动执行，可通过参数控制
 
+## 项目结构
+
+项目采用模块化设计，遵循单一职责原则，每个文件不超过200行。
+
+```
+Tools/
+├── core/                      # 核心基础模块
+│   ├── base_controller.py    # 基础控制器（命令执行）
+│   ├── script_executor.py     # 脚本执行器
+│   └── result_parser.py       # 结果解析器
+├── modules/                   # 功能模块（按功能分类）
+│   ├── register.py            # 寄存器操作
+│   ├── breakpoint.py          # 断点管理
+│   ├── memory.py              # 内存操作（组合模块）
+│   ├── memory_basic.py        # 内存基础操作
+│   ├── memory_advanced.py     # 内存高级操作
+│   ├── thread.py              # 线程管理
+│   ├── process.py             # 进程管理
+│   ├── code_analysis.py       # 代码分析
+│   ├── code_modification.py   # 代码修改
+│   ├── debug_control.py       # 调试控制
+│   ├── information.py         # 信息获取
+│   ├── advanced.py            # 高级功能
+│   ├── utility.py             # 实用工具（组合模块）
+│   ├── utility_bookmark.py    # 书签操作
+│   └── utility_management.py  # 管理功能（文件/脚本/配置）
+├── registry/                  # 工具注册模块
+│   └── tool_registry.py       # MCP工具注册
+├── utils/                     # 共享工具模块
+│   └── address_utils.py       # 地址工具函数
+└── x64dbg_controller.py       # 主控制器（整合所有模块）
+```
+
+### 设计原则
+
+1. **单一职责**：每个模块只负责一个功能领域
+2. **文件大小限制**：每个文件不超过200行（部分组合模块除外）
+3. **组合模式**：使用组合而非继承，便于扩展和维护
+4. **向后兼容**：保持原有接口不变，确保现有代码正常工作
+
+### 模块说明
+
+- **core/**：提供基础功能，所有模块都依赖这些核心组件
+- **modules/**：功能模块，每个模块封装一类相关功能
+- **registry/**：负责将功能模块注册为MCP工具
+- **utils/**：提供通用的工具函数，供各模块使用
+
 ## 可用工具
 
 ### x64dbg_execute_command
