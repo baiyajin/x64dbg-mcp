@@ -1651,6 +1651,110 @@ except Exception as e:
                 "status": "error",
                 "message": f"获取跟踪记录失败: {str(e)}"
             }
+    
+    # ========== 内存分配/释放功能 ==========
+    
+    def allocate_memory(self, size: int, protection: str = "RWX") -> Dict[str, Any]:
+        """
+        分配内存
+        
+        :param size: 内存大小（字节）
+        :param protection: 保护属性，默认RWX（可读可写可执行）
+        """
+        if size <= 0 or size > 100 * 1024 * 1024:
+            raise ValueError('内存大小必须在1字节到100MB之间!')
+        
+        try:
+            alloc_script = f"""# X64Dbg Allocate Memory Script
+try:
+    import dbg
+    size = {size}
+    prot = '{protection}'
+    
+    # 分配内存
+    if hasattr(dbg, 'malloc'):
+        addr = dbg.malloc(size)
+        if addr:
+            # 设置保护属性
+            if prot:
+                dbg.setMemoryProtection(addr, size, prot)
+            print(f"MCP_RESULT:{{'status':'success','address':hex(addr),'size':{size},'protection':'{protection}'}}")
+        else:
+            print(f"MCP_RESULT:{{'status':'error','error':'内存分配失败'}}")
+    else:
+        result = dbgcmd(f'alloc {{size}}, {{prot}}')
+        print(f"MCP_RESULT:{{'status':'success','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(alloc_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"分配内存失败: {str(e)}"
+            }
+    
+    def free_memory(self, address: str) -> Dict[str, Any]:
+        """
+        释放内存
+        
+        :param address: 内存地址
+        """
+        address = address.strip().replace(" ", "")
+        
+        try:
+            free_script = f"""# X64Dbg Free Memory Script
+try:
+    import dbg
+    addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    
+    # 释放内存
+    if hasattr(dbg, 'free'):
+        result = dbg.free(addr)
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','result':result}}")
+    else:
+        result = dbgcmd(f'free {{addr}}')
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(free_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"释放内存失败: {str(e)}"
+            }
+    
+    def get_memory_region_info(self, address: str) -> Dict[str, Any]:
+        """
+        获取内存区域信息
+        
+        :param address: 内存地址
+        """
+        address = address.strip().replace(" ", "")
+        
+        try:
+            region_script = f"""# X64Dbg Get Memory Region Info Script
+try:
+    import dbg
+    addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    
+    # 获取内存区域信息
+    if hasattr(dbg, 'getMemoryRegionInfo'):
+        info = dbg.getMemoryRegionInfo(addr)
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','info':{{info}}}}")
+    else:
+        result = dbgcmd(f'VirtualQuery {{addr}}')
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(region_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"获取内存区域信息失败: {str(e)}"
+            }
 
 
 # 全局控制器实例
@@ -2901,4 +3005,58 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"获取跟踪记录失败: {str(e)}"}
+    
+    # ========== 内存分配/释放功能 ==========
+    
+    @mcp.tool('x64dbg_allocate_memory', description='分配内存')
+    async def allocate_memory(size: int, protection: str = "RWX"):
+        """
+        在目标进程中分配内存
+        
+        :param size: 内存大小（字节），最大100MB
+        :param protection: 保护属性，默认RWX（可读可写可执行），可选值: R, W, X, RW, RX, RWX
+        :return: 分配结果，包含分配的内存地址
+        """
+        if size <= 0 or size > 100 * 1024 * 1024:
+            raise ValueError('内存大小必须在1字节到100MB之间!')
+        
+        try:
+            result = controller.allocate_memory(size, protection)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"分配内存失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_free_memory', description='释放内存')
+    async def free_memory(address: str):
+        """
+        释放之前分配的内存
+        
+        :param address: 内存地址，十六进制格式(0x401000)
+        :return: 释放结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        try:
+            result = controller.free_memory(address)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"释放内存失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_memory_region_info', description='获取内存区域信息')
+    async def get_memory_region_info(address: str):
+        """
+        获取内存区域信息（大小、保护属性、状态等）
+        
+        :param address: 内存地址，十六进制格式(0x401000)
+        :return: 内存区域信息
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        try:
+            result = controller.get_memory_region_info(address)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取内存区域信息失败: {str(e)}"}
 
