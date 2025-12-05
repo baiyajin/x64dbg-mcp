@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "x64dbg-mcp": {
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/main.py"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    }
+  }
+}
