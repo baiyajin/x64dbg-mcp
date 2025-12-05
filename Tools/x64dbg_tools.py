@@ -1755,6 +1755,42 @@ except Exception as e:
                 "status": "error",
                 "message": f"获取内存区域信息失败: {str(e)}"
             }
+    
+    # ========== 表达式计算功能 ==========
+    
+    def evaluate_expression(self, expression: str) -> Dict[str, Any]:
+        """
+        计算表达式
+        
+        :param expression: 表达式，可以包含寄存器、内存地址、常量等
+            例如: "eax + 0x100", "[0x401000]", "ebx * 2"
+        """
+        if not expression or expression.strip() == "":
+            raise ValueError('表达式不能为空!')
+        
+        try:
+            eval_script = f"""# X64Dbg Evaluate Expression Script
+try:
+    import dbg
+    expr = '{expression}'
+    
+    # 计算表达式
+    if hasattr(dbg, 'evaluateExpression'):
+        result = dbg.evaluateExpression(expr)
+        print(f"MCP_RESULT:{{'status':'success','expression':'{expression}','result':hex(result) if isinstance(result, int) else result}}")
+    else:
+        # 尝试通过命令计算
+        result = dbgcmd(f'calc {{expr}}')
+        print(f"MCP_RESULT:{{'status':'success','expression':'{expression}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(eval_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"计算表达式失败: {str(e)}"
+            }
 
 
 # 全局控制器实例
@@ -3059,4 +3095,27 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"获取内存区域信息失败: {str(e)}"}
+    
+    # ========== 表达式计算功能 ==========
+    
+    @mcp.tool('x64dbg_evaluate_expression', description='计算表达式')
+    async def evaluate_expression(expression: str):
+        """
+        计算表达式（支持寄存器、内存地址、常量等）
+        
+        :param expression: 表达式，例如:
+            - "eax + 0x100" (寄存器加常量)
+            - "[0x401000]" (读取内存地址)
+            - "ebx * 2" (寄存器乘法)
+            - "0x401000 + 0x100" (地址计算)
+        :return: 计算结果
+        """
+        if not expression or expression.strip() == "":
+            raise ValueError('表达式不能为空!')
+        
+        try:
+            result = controller.evaluate_expression(expression)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"计算表达式失败: {str(e)}"}
 
