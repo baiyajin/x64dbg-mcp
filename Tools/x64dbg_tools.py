@@ -1894,6 +1894,79 @@ except Exception as e:
                 "status": "error",
                 "message": f"批量读取内存失败: {str(e)}"
             }
+    
+    # ========== 结构体查看功能 ==========
+    
+    def view_structure(self, address: str, structure_type: str = "auto") -> Dict[str, Any]:
+        """
+        查看结构体数据
+        
+        :param address: 结构体地址
+        :param structure_type: 结构体类型，可选值:
+            - "auto": 自动检测
+            - "PEB": Process Environment Block
+            - "TEB": Thread Environment Block
+            - "PE": PE文件头
+            - "custom": 自定义结构体（需要提供字段定义）
+        """
+        address = address.strip().replace(" ", "")
+        
+        try:
+            struct_script = f"""# X64Dbg View Structure Script
+try:
+    import dbg
+    addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    struct_type = '{structure_type}'
+    
+    # 定义常见结构体
+    structures = {{
+        'PEB': {{
+            'BeingDebugged': (0x02, 1),
+            'ProcessHeap': (0x30, 8),
+            'Ldr': (0x18, 8)
+        }},
+        'TEB': {{
+            'ProcessEnvironmentBlock': (0x30, 8),
+            'ThreadLocalStorage': (0x58, 8),
+            'LastErrorValue': (0x68, 4)
+        }}
+    }}
+    
+    if struct_type.upper() in structures:
+        struct_def = structures[struct_type.upper()]
+        result = {{}}
+        for field_name, (offset, size) in struct_def.items():
+            field_addr = addr + offset
+            if size == 1:
+                value = dbg.readByte(field_addr)
+            elif size == 2:
+                value = dbg.readWord(field_addr)
+            elif size == 4:
+                value = dbg.readDword(field_addr)
+            elif size == 8:
+                value = dbg.readQword(field_addr)
+            else:
+                value = dbg.read(field_addr, size)
+            result[field_name] = {{
+                'offset': offset,
+                'address': hex(field_addr),
+                'value': hex(value) if isinstance(value, int) else value,
+                'size': size
+            }}
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','type':'{structure_type}','fields':{{result}}}}")
+    else:
+        # 尝试通过命令查看
+        result = dbgcmd(f'struct {{addr}}, {{struct_type}}')
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','type':'{structure_type}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(struct_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"查看结构体失败: {str(e)}"
+            }
 
 
 # 全局控制器实例
@@ -3302,4 +3375,32 @@ def register_tools(mcp):
             return {"status": "error", "message": "格式错误，必须是有效的JSON数组格式"}
         except Exception as e:
             return {"status": "error", "message": f"批量读取内存失败: {str(e)}"}
+    
+    # ========== 结构体查看功能 ==========
+    
+    @mcp.tool('x64dbg_view_structure', description='查看结构体数据')
+    async def view_structure(address: str, structure_type: str = "auto"):
+        """
+        查看结构体数据（解析内存中的结构体）
+        
+        :param address: 结构体地址，十六进制格式(0x401000)
+        :param structure_type: 结构体类型，可选值:
+            - "auto": 自动检测
+            - "PEB": Process Environment Block
+            - "TEB": Thread Environment Block
+            - "PE": PE文件头
+        :return: 结构体字段和值
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        valid_types = ["auto", "PEB", "TEB", "PE"]
+        if structure_type not in valid_types:
+            raise ValueError(f'结构体类型必须是以下之一: {", ".join(valid_types)}')
+        
+        try:
+            result = controller.view_structure(address, structure_type)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"查看结构体失败: {str(e)}"}
 
