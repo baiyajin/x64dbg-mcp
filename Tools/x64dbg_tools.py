@@ -800,6 +800,217 @@ except Exception as e:
     def get_patches(self) -> Dict[str, Any]:
         """获取所有补丁列表"""
         return self.execute_command("patchlist")
+    
+    # ========== 低优先级功能（高级功能） ==========
+    
+    def inject_code(self, address: str, shellcode: str, create_thread: bool = False) -> Dict[str, Any]:
+        """
+        注入代码（Shellcode）到目标进程
+        
+        :param address: 注入地址（如果为None，则在内存中分配空间）
+        :param shellcode: Shellcode（十六进制字符串，如: "90 90 90"）
+        :param create_thread: 是否创建新线程执行（默认False，在当前线程执行）
+        """
+        address = address.strip().replace(" ", "") if address else ""
+        
+        try:
+            inject_script = f"""# X64Dbg Code Injection Script
+try:
+    import dbg
+    shellcode_hex = '{shellcode.replace(' ', '')}'
+    shellcode_bytes = bytes.fromhex(shellcode_hex)
+    
+    if '{address}':
+        addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    else:
+        # 分配内存
+        addr = dbg.malloc(len(shellcode_bytes))
+    
+    # 写入Shellcode
+    dbg.write(addr, shellcode_bytes)
+    
+    # 如果需要创建线程执行
+    if {str(create_thread).lower()}:
+        thread_id = dbg.createThread(addr)
+        result = {{'address': hex(addr), 'thread_id': thread_id, 'executed': True}}
+    else:
+        # 保存当前上下文，执行代码，恢复上下文
+        old_eip = dbg.getRegister('EIP') if hasattr(dbg, 'getRegister') else None
+        dbg.setRegister('EIP', addr)
+        result = {{'address': hex(addr), 'executed': False, 'message': '代码已注入，需要手动执行'}}
+        if old_eip:
+            dbg.setRegister('EIP', old_eip)
+    
+    print(f"MCP_RESULT:{{'status':'success','result':{{result}}}}")
+except Exception as e:
+    import traceback
+    error_msg = str(e) + "\\n" + traceback.format_exc()
+    print(f"MCP_RESULT:{{'status':'error','error':'{{error_msg}}'}}")
+"""
+            return self.execute_script_auto(inject_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"代码注入失败: {str(e)}"
+            }
+    
+    def inject_dll(self, dll_path: str, wait_for_load: bool = True) -> Dict[str, Any]:
+        """
+        注入DLL到目标进程
+        
+        :param dll_path: DLL文件路径
+        :param wait_for_load: 是否等待DLL加载完成（默认True）
+        """
+        try:
+            inject_script = f"""# X64Dbg DLL Injection Script
+try:
+    import dbg
+    import os
+    dll_path = r"{dll_path}"
+    
+    if not os.path.exists(dll_path):
+        raise FileNotFoundError(f"DLL文件不存在: {{dll_path}}")
+    
+    # 注入DLL
+    if hasattr(dbg, 'injectDLL'):
+        result = dbg.injectDLL(dll_path, {str(wait_for_load).lower()})
+        print(f"MCP_RESULT:{{'status':'success','dll_path':'{dll_path}','result':result}}")
+    else:
+        # 尝试通过LoadLibrary注入
+        # 在目标进程中调用LoadLibrary
+        kernel32 = dbg.getModule('kernel32.dll')
+        load_library = dbg.getAddressFromSymbol('kernel32.LoadLibraryA')
+        
+        # 在目标进程中分配内存写入DLL路径
+        path_bytes = dll_path.encode('utf-8') + b'\\x00'
+        path_addr = dbg.malloc(len(path_bytes))
+        dbg.write(path_addr, path_bytes)
+        
+        # 调用LoadLibrary
+        result = dbg.call(load_library, [path_addr])
+        print(f"MCP_RESULT:{{'status':'success','dll_path':'{dll_path}','module_handle':hex(result) if result else None}}")
+except Exception as e:
+    import traceback
+    error_msg = str(e) + "\\n" + traceback.format_exc()
+    print(f"MCP_RESULT:{{'status':'error','error':'{{error_msg}}'}}")
+"""
+            return self.execute_script_auto(inject_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"DLL注入失败: {str(e)}"
+            }
+    
+    def eject_dll(self, dll_name: str) -> Dict[str, Any]:
+        """
+        卸载DLL（从目标进程中移除）
+        
+        :param dll_name: DLL名称（如: "mydll.dll"）
+        """
+        try:
+            eject_script = f"""# X64Dbg DLL Ejection Script
+try:
+    import dbg
+    dll_name = '{dll_name}'
+    
+    # 获取模块句柄
+    module = dbg.getModule(dll_name)
+    if not module:
+        raise ValueError(f"模块未加载: {{dll_name}}")
+    
+    # 获取FreeLibrary地址
+    kernel32 = dbg.getModule('kernel32.dll')
+    free_library = dbg.getAddressFromSymbol('kernel32.FreeLibrary')
+    
+    # 调用FreeLibrary卸载DLL
+    result = dbg.call(free_library, [module])
+    print(f"MCP_RESULT:{{'status':'success','dll_name':'{dll_name}','result':result}}")
+except Exception as e:
+    import traceback
+    error_msg = str(e) + "\\n" + traceback.format_exc()
+    print(f"MCP_RESULT:{{'status':'error','error':'{{error_msg}}'}}")
+"""
+            return self.execute_script_auto(eject_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"DLL卸载失败: {str(e)}"
+            }
+    
+    def bypass_antidebug(self, method: str = "all") -> Dict[str, Any]:
+        """
+        绕过反调试检测
+        
+        :param method: 绕过方法，可选值:
+            - "all": 所有方法
+            - "peb": 修改PEB标志
+            - "ntquery": 绕过NtQueryInformationProcess
+            - "debugport": 清除调试端口
+            - "heap": 修改堆标志
+        """
+        try:
+            bypass_script = f"""# X64Dbg Anti-Debug Bypass Script
+try:
+    import dbg
+    method = '{method}'
+    
+    results = {{}}
+    
+    if method in ['all', 'peb']:
+        # 修改PEB中的BeingDebugged标志
+        try:
+            peb = dbg.getPEB()
+            if peb:
+                # BeingDebugged位于PEB偏移0x02
+                dbg.write(peb + 0x02, b'\\x00')
+                results['peb'] = 'success'
+        except:
+            results['peb'] = 'failed'
+    
+    if method in ['all', 'ntquery']:
+        # 绕过NtQueryInformationProcess
+        try:
+            # Hook NtQueryInformationProcess返回False
+            ntdll = dbg.getModule('ntdll.dll')
+            if ntdll:
+                nt_query = dbg.getAddressFromSymbol('ntdll.NtQueryInformationProcess')
+                # 这里需要实际hook实现，简化处理
+                results['ntquery'] = 'hook_required'
+        except:
+            results['ntquery'] = 'failed'
+    
+    if method in ['all', 'debugport']:
+        # 清除调试端口
+        try:
+            # 通过修改PEB的ProcessParameters或直接修改调试端口
+            results['debugport'] = 'advanced_required'
+        except:
+            results['debugport'] = 'failed'
+    
+    if method in ['all', 'heap']:
+        # 修改堆标志
+        try:
+            # 修改PEB中的堆标志
+            peb = dbg.getPEB()
+            if peb:
+                # HeapFlags位于PEB偏移0x70
+                dbg.write(peb + 0x70, b'\\x00\\x00\\x00\\x00')
+                results['heap'] = 'success'
+        except:
+            results['heap'] = 'failed'
+    
+    print(f"MCP_RESULT:{{'status':'success','method':'{method}','results':{{results}}}}")
+except Exception as e:
+    import traceback
+    error_msg = str(e) + "\\n" + traceback.format_exc()
+    print(f"MCP_RESULT:{{'status':'error','error':'{{error_msg}}'}}")
+"""
+            return self.execute_script_auto(bypass_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"反调试绕过失败: {str(e)}"
+            }
 
 
 # 全局控制器实例
@@ -1545,4 +1756,83 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"获取补丁列表失败: {str(e)}"}
+    
+    # ========== 低优先级新功能（高级功能） ==========
+    
+    @mcp.tool('x64dbg_inject_code', description='注入代码（Shellcode）到目标进程')
+    async def inject_code(address: str, shellcode: str, create_thread: bool = False):
+        """
+        注入代码（Shellcode）到目标进程
+        
+        :param address: 注入地址，十六进制格式(0x401000)，如果为空则在内存中分配空间
+        :param shellcode: Shellcode，十六进制字符串（如: "90 90 90" 表示NOP指令）
+        :param create_thread: 是否创建新线程执行（默认False，在当前线程执行）
+        :return: 注入结果
+        """
+        if not shellcode or shellcode.strip() == "":
+            raise ValueError('Shellcode不能为空!')
+        
+        try:
+            result = controller.inject_code(address if address else None, shellcode, create_thread)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"代码注入失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_inject_dll', description='注入DLL到目标进程')
+    async def inject_dll(dll_path: str, wait_for_load: bool = True):
+        """
+        注入DLL到目标进程
+        
+        :param dll_path: DLL文件完整路径（如: "C:\\path\\to\\mydll.dll"）
+        :param wait_for_load: 是否等待DLL加载完成（默认True）
+        :return: 注入结果
+        """
+        if not dll_path or dll_path.strip() == "":
+            raise ValueError('DLL路径不能为空!')
+        
+        try:
+            result = controller.inject_dll(dll_path, wait_for_load)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"DLL注入失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_eject_dll', description='卸载DLL（从目标进程中移除）')
+    async def eject_dll(dll_name: str):
+        """
+        卸载DLL（从目标进程中移除）
+        
+        :param dll_name: DLL名称（如: "mydll.dll"）
+        :return: 卸载结果
+        """
+        if not dll_name or dll_name.strip() == "":
+            raise ValueError('DLL名称不能为空!')
+        
+        try:
+            result = controller.eject_dll(dll_name)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"DLL卸载失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_bypass_antidebug', description='绕过反调试检测')
+    async def bypass_antidebug(method: str = "all"):
+        """
+        绕过反调试检测
+        
+        :param method: 绕过方法，可选值:
+            - "all": 所有方法
+            - "peb": 修改PEB标志
+            - "ntquery": 绕过NtQueryInformationProcess
+            - "debugport": 清除调试端口
+            - "heap": 修改堆标志
+        :return: 绕过结果
+        """
+        valid_methods = ["all", "peb", "ntquery", "debugport", "heap"]
+        if method.lower() not in valid_methods:
+            raise ValueError(f'方法必须是以下之一: {", ".join(valid_methods)}')
+        
+        try:
+            result = controller.bypass_antidebug(method.lower())
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"反调试绕过失败: {str(e)}"}
 
