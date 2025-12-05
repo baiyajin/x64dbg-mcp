@@ -1571,6 +1571,86 @@ except Exception as e:
                 "status": "error",
                 "message": f"跳转书签失败: {str(e)}"
             }
+    
+    # ========== 执行跟踪功能 ==========
+    
+    def start_trace(self) -> Dict[str, Any]:
+        """开始执行跟踪"""
+        try:
+            trace_script = """# X64Dbg Start Trace Script
+try:
+    import dbg
+    # 开始跟踪
+    if hasattr(dbg, 'startTrace'):
+        result = dbg.startTrace()
+        print(f"MCP_RESULT:{{'status':'success','message':'跟踪已开始','result':result}}")
+    else:
+        result = dbgcmd('trace')
+        print(f"MCP_RESULT:{{'status':'success','message':'跟踪已开始','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(trace_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"开始跟踪失败: {str(e)}"
+            }
+    
+    def stop_trace(self) -> Dict[str, Any]:
+        """停止执行跟踪"""
+        try:
+            stop_script = """# X64Dbg Stop Trace Script
+try:
+    import dbg
+    # 停止跟踪
+    if hasattr(dbg, 'stopTrace'):
+        result = dbg.stopTrace()
+        print(f"MCP_RESULT:{{'status':'success','message':'跟踪已停止','result':result}}")
+    else:
+        result = dbgcmd('tracestop')
+        print(f"MCP_RESULT:{{'status':'success','message':'跟踪已停止','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(stop_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"停止跟踪失败: {str(e)}"
+            }
+    
+    def get_trace_records(self, count: int = 100) -> Dict[str, Any]:
+        """
+        获取跟踪记录
+        
+        :param count: 要获取的记录数量，默认100，最大10000
+        """
+        if count <= 0 or count > 10000:
+            count = 100
+        
+        try:
+            records_script = f"""# X64Dbg Get Trace Records Script
+try:
+    import dbg
+    count = {count}
+    
+    # 获取跟踪记录
+    if hasattr(dbg, 'getTraceRecords'):
+        records = dbg.getTraceRecords(count)
+        print(f"MCP_RESULT:{{'status':'success','count':len(records),'records':records}}")
+    else:
+        result = dbgcmd(f'tracelist {{count}}')
+        print(f"MCP_RESULT:{{'status':'success','count':{count},'result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(records_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"获取跟踪记录失败: {str(e)}"
+            }
 
 
 # 全局控制器实例
@@ -2776,4 +2856,49 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"跳转书签失败: {str(e)}"}
+    
+    # ========== 执行跟踪功能 ==========
+    
+    @mcp.tool('x64dbg_start_trace', description='开始执行跟踪')
+    async def start_trace():
+        """
+        开始执行跟踪（记录程序执行路径）
+        
+        :return: 开始跟踪结果
+        """
+        try:
+            result = controller.start_trace()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"开始跟踪失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_stop_trace', description='停止执行跟踪')
+    async def stop_trace():
+        """
+        停止执行跟踪
+        
+        :return: 停止跟踪结果
+        """
+        try:
+            result = controller.stop_trace()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"停止跟踪失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_trace_records', description='获取跟踪记录')
+    async def get_trace_records(count: int = 100):
+        """
+        获取执行跟踪记录
+        
+        :param count: 要获取的记录数量，默认100，最大10000
+        :return: 跟踪记录列表
+        """
+        if count <= 0 or count > 10000:
+            raise ValueError('记录数量必须在1-10000之间!')
+        
+        try:
+            result = controller.get_trace_records(count)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取跟踪记录失败: {str(e)}"}
 
