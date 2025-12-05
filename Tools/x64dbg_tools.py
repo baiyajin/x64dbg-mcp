@@ -1066,7 +1066,9 @@ try:
         if old_eip:
             dbg.setRegister('EIP', old_eip)
     
-    print(f"MCP_RESULT:{{'status':'success','result':{{result}}}}")
+    import json
+    final_result = {{'status':'success','result':result}}
+    print("MCP_RESULT:" + json.dumps(final_result))
 except Exception as e:
     import traceback
     error_msg = str(e) + "\\n" + traceback.format_exc()
@@ -1360,7 +1362,9 @@ try:
         'differences_count': len(differences),
         'differences': differences[:100]  # 限制返回前100个差异
     }}
-    print(f"MCP_RESULT:{{'status':'success','result':{{result}}}}")
+    import json
+    final_result = {{'status':'success','result':result}}
+    print("MCP_RESULT:" + json.dumps(final_result))
 except Exception as e:
     print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
 """
@@ -1396,7 +1400,9 @@ try:
     fill_data = bytes([fill_value] * size)
     dbg.write(addr, fill_data)
     
-    print(f"MCP_RESULT:{{'status':'success','address':'{address}','size':{size},'value':{value}}")
+    import json
+    result_dict = {{'status':'success','address':'{address}','size':{size},'value':{value}}}
+    print("MCP_RESULT:" + json.dumps(result_dict))
 except Exception as e:
     print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
 """
