@@ -24,6 +24,9 @@ X64Dbg的Model Context Protocol服务器，用于AI辅助逆向分析和调试�
 - ✅ 数据断点（监视点）
 - ✅ 进程附加/分离
 - ✅ 代码补丁管理
+- ✅ 代码注入（Shellcode注入）
+- ✅ DLL注入/卸载
+- ✅ 反调试绕过
 
 ## 安装
 
@@ -389,6 +392,18 @@ Cursor支持通过项目配置文件或全局配置文件来设置MCP服务器�
 
 ### x64dbg_get_patches
 获取所有补丁列表
+
+### x64dbg_inject_code
+注入代码（Shellcode）到目标进程
+
+### x64dbg_inject_dll
+注入DLL到目标进程
+
+### x64dbg_eject_dll
+卸载DLL（从目标进程中移除）
+
+### x64dbg_bypass_antidebug
+绕过反调试检测（修改PEB标志、绕过NtQuery等）
 
 ## 注意事项
 
