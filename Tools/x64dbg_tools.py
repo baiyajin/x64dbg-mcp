@@ -43,15 +43,46 @@ class X64DbgController:
         except Exception as e:
             raise Exception(f"创建脚本文件失败: {str(e)}")
     
-    def execute_command(self, command: str) -> Dict[str, Any]:
+    def execute_command(self, command: str, auto_execute: bool = True) -> Dict[str, Any]:
         """
         执行x64dbg命令
         通过创建Python脚本文件，x64dbg插件可以读取并执行
+        如果auto_execute为True，尝试通过插件API自动执行
+        
+        :param command: 要执行的命令
+        :param auto_execute: 是否尝试自动执行（默认True）
         """
         try:
             # 创建Python脚本内容
             # x64dbg的Python插件通常使用dbgcmd函数执行命令
-            script_content = f"""# X64Dbg MCP Command Script
+            if auto_execute:
+                # 尝试自动执行的脚本
+                script_content = f"""# X64Dbg MCP Command Script (Auto Execute)
+# Command: {command}
+try:
+    import dbg
+    # 尝试通过API直接执行
+    result = dbgcmd('{command}')
+    print(f"MCP_RESULT:{{'status':'success','command':'{command}','result':result,'auto_executed':True}}")
+except NameError:
+    # 如果不在x64dbg环境中，保存脚本文件
+    script_file = r"{self.temp_script_dir}\\mcp_cmd_{os.getpid()}.py"
+    with open(script_file, 'w', encoding='utf-8') as f:
+        f.write('''# X64Dbg MCP Command Script
+try:
+    result = dbgcmd('{command}')
+    print(f"MCP_RESULT:{{'status':'success','command':'{command}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','command':'{command}','error':str(e)}}")
+''')
+    print(f"MCP_RESULT:{{'status':'pending','command':'{command}','script_file':'{{script_file}}','message':'脚本已保存，请在x64dbg中加载执行'}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','command':'{command}','error':str(e)}}")
+"""
+                return self.execute_script_auto(script_content)
+            else:
+                # 传统方式：仅创建脚本文件
+                script_content = f"""# X64Dbg MCP Command Script
 # Command: {command}
 try:
     result = dbgcmd('{command}')
@@ -59,15 +90,14 @@ try:
 except Exception as e:
     print(f"MCP_RESULT:{{'status':'error','command':'{command}','error':str(e)}}")
 """
-            
-            script_file = self._create_script_file(script_content)
-            
-            return {
-                "status": "success",
-                "command": command,
-                "script_file": script_file,
-                "message": f"命令脚本已创建: {command}。请在x64dbg中执行: File -> Script -> Load -> {os.path.basename(script_file)}"
-            }
+                script_file = self._create_script_file(script_content)
+                
+                return {
+                    "status": "success",
+                    "command": command,
+                    "script_file": script_file,
+                    "message": f"命令脚本已创建: {command}。请在x64dbg中执行: File -> Script -> Load -> {os.path.basename(script_file)}"
+                }
         except Exception as e:
             return {
                 "status": "error",
@@ -149,6 +179,183 @@ except Exception as e:
             return self.execute_command(f"findmem {pattern} {start} {end}")
         else:
             return self.execute_command(f"findmem {pattern}")
+    
+    def execute_script_auto(self, script_content: str) -> Dict[str, Any]:
+        """
+        自动执行脚本（通过插件API）
+        尝试通过x64dbg的Python插件API自动执行脚本
+        """
+        try:
+            # 转义脚本内容中的特殊字符
+            escaped_content = script_content.replace('\\', '\\\\').replace("'", "\\'").replace('"', '\\"')
+            script_file_path = os.path.join(self.temp_script_dir, f"mcp_auto_{os.getpid()}.py")
+            
+            # 创建增强的脚本，尝试自动执行
+            auto_script = f"""# X64Dbg MCP Auto Execute Script
+import os
+import sys
+try:
+    # 尝试通过x64dbg Python API执行
+    # 如果dbgcmd可用，说明在x64dbg环境中
+    if 'dbgcmd' in globals() or 'dbg' in sys.modules:
+        exec(compile('''{escaped_content}''', '<string>', 'exec'))
+        print("MCP_RESULT:{{'status':'success','message':'脚本自动执行成功'}}")
+    else:
+        raise NameError("Not in x64dbg environment")
+except NameError:
+    # 如果不在x64dbg环境中，保存脚本文件
+    script_file = r"{script_file_path}"
+    with open(script_file, 'w', encoding='utf-8') as f:
+        f.write('''{escaped_content}''')
+    print(f"MCP_RESULT:{{'status':'pending','script_file':'{{script_file}}','message':'脚本已保存，请在x64dbg中加载执行'}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            script_file = self._create_script_file(auto_script)
+            return {
+                "status": "success",
+                "script_file": script_file,
+                "message": "自动执行脚本已创建，如果x64dbg支持API调用将自动执行"
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"创建自动执行脚本失败: {str(e)}"
+            }
+    
+    def get_debugger_status(self) -> Dict[str, Any]:
+        """获取调试器实时状态"""
+        try:
+            # 获取多个状态信息
+            status_script = """# X64Dbg Status Script
+try:
+    import dbg
+    status = {
+        'is_debugging': dbg.isDebugging(),
+        'is_running': dbg.isRunning(),
+        'current_pid': dbg.getProcessId(),
+        'current_tid': dbg.getThreadId(),
+        'current_address': hex(dbg.getCurrentAddress()) if dbg.isDebugging() else None
+    }
+    print(f"MCP_RESULT:{{'status':'success','data':{status}}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(status_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"获取调试器状态失败: {str(e)}"
+            }
+    
+    def set_breakpoint_conditional(self, address: str, condition: str = "") -> Dict[str, Any]:
+        """设置带条件的断点"""
+        address = address.strip().replace(" ", "")
+        if condition:
+            # x64dbg支持条件断点，格式: bp address,condition
+            return self.execute_command(f"bp {address},{condition}")
+        else:
+            return self.set_breakpoint(address)
+    
+    def dump_memory(self, address: str, size: int, output_file: str = "") -> Dict[str, Any]:
+        """内存转储功能"""
+        address = address.strip().replace(" ", "")
+        if not output_file:
+            output_file = os.path.join(self.temp_script_dir, f"dump_{address.replace('0x', '').replace(' ', '')}_{size}.bin")
+        
+        try:
+            dump_script = f"""# X64Dbg Memory Dump Script
+try:
+    import dbg
+    addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    size = {size}
+    data = dbg.read(addr, size)
+    with open(r"{output_file}", 'wb') as f:
+        f.write(data)
+    print(f"MCP_RESULT:{{'status':'success','address':'{address}','size':{size},'output_file':'{output_file}'}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(dump_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"内存转储失败: {str(e)}"
+            }
+    
+    def resolve_symbol(self, symbol: str) -> Dict[str, Any]:
+        """解析符号地址"""
+        try:
+            # x64dbg可以通过符号名称解析地址
+            resolve_script = f"""# X64Dbg Symbol Resolution Script
+try:
+    import dbg
+    # 尝试解析符号
+    addr = dbg.getAddressFromSymbol('{symbol}')
+    if addr:
+        print(f"MCP_RESULT:{{'status':'success','symbol':'{symbol}','address':hex(addr)}}")
+    else:
+        # 尝试通过命令解析
+        result = dbgcmd('sym.fromname({symbol})')
+        print(f"MCP_RESULT:{{'status':'success','symbol':'{symbol}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(resolve_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"符号解析失败: {str(e)}"
+            }
+    
+    def get_threads(self) -> Dict[str, Any]:
+        """获取线程列表"""
+        return self.execute_command("thread")
+    
+    def get_breakpoints(self) -> Dict[str, Any]:
+        """获取所有断点列表"""
+        return self.execute_command("bplist")
+    
+    def get_call_stack(self, depth: int = 20) -> Dict[str, Any]:
+        """获取调用栈"""
+        return self.execute_command(f"callstack {depth}")
+    
+    def get_segments(self) -> Dict[str, Any]:
+        """获取内存段信息"""
+        return self.execute_command("mem")
+    
+    def get_strings(self, min_length: int = 4) -> Dict[str, Any]:
+        """搜索字符串"""
+        return self.execute_command(f"strref {min_length}")
+    
+    def get_references(self, address: str) -> Dict[str, Any]:
+        """获取地址引用"""
+        address = address.strip().replace(" ", "")
+        return self.execute_command(f"xref {address}")
+    
+    def get_imports(self) -> Dict[str, Any]:
+        """获取导入函数列表"""
+        return self.execute_command("imp")
+    
+    def get_exports(self) -> Dict[str, Any]:
+        """获取导出函数列表"""
+        return self.execute_command("exp")
+    
+    def get_comments(self, address: str = "") -> Dict[str, Any]:
+        """获取注释"""
+        if address:
+            address = address.strip().replace(" ", "")
+            return self.execute_command(f"comment {address}")
+        else:
+            return self.execute_command("commentlist")
+    
+    def get_labels(self) -> Dict[str, Any]:
+        """获取标签列表"""
+        return self.execute_command("labellist")
+    
+    def get_functions(self) -> Dict[str, Any]:
+        """获取函数列表"""
+        return self.execute_command("functionlist")
 
 
 # 全局控制器实例
@@ -385,4 +592,232 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"搜索内存失败: {str(e)}"}
+    
+    # ========== 新增功能 ==========
+    
+    @mcp.tool('x64dbg_get_debugger_status', description='获取调试器实时状态')
+    async def get_debugger_status():
+        """
+        获取调试器的实时状态信息
+        
+        :return: 调试器状态，包括是否正在调试、是否运行中、当前PID、TID、地址等
+        """
+        try:
+            result = controller.get_debugger_status()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取调试器状态失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_set_breakpoint_conditional', description='设置带条件的断点')
+    async def set_breakpoint_conditional(address: str, condition: str = ""):
+        """
+        在指定地址设置带条件的断点
+        
+        :param address: 断点地址，十六进制格式(0x401000)
+        :param condition: 断点条件表达式(可选)，例如: "eax==0x100"
+        :return: 设置结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        try:
+            result = controller.set_breakpoint_conditional(address, condition)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"设置条件断点失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_dump_memory', description='将内存转储到文件')
+    async def dump_memory(address: str, size: int, output_file: str = ""):
+        """
+        将指定地址的内存转储到文件
+        
+        :param address: 内存起始地址，十六进制格式(0x401000)
+        :param size: 要转储的字节数，最大10MB
+        :param output_file: 输出文件路径(可选)，默认保存在临时目录
+        :return: 转储结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        if size <= 0 or size > 10 * 1024 * 1024:
+            raise ValueError('转储大小必须在1字节到10MB之间!')
+        
+        try:
+            result = controller.dump_memory(address, size, output_file)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"内存转储失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_resolve_symbol', description='解析符号名称到地址')
+    async def resolve_symbol(symbol: str):
+        """
+        解析符号名称到内存地址
+        
+        :param symbol: 符号名称，例如: "MessageBoxA", "kernel32.CreateFile"
+        :return: 符号地址信息
+        """
+        if not symbol or symbol.strip() == "":
+            raise ValueError('符号名称不能为空!')
+        
+        try:
+            result = controller.resolve_symbol(symbol)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"符号解析失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_threads', description='获取线程列表')
+    async def get_threads():
+        """
+        获取当前调试进程的所有线程列表
+        
+        :return: 线程列表信息
+        """
+        try:
+            result = controller.get_threads()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取线程列表失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_breakpoints', description='获取所有断点列表')
+    async def get_breakpoints():
+        """
+        获取当前设置的所有断点列表
+        
+        :return: 断点列表信息
+        """
+        try:
+            result = controller.get_breakpoints()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取断点列表失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_call_stack', description='获取调用栈信息')
+    async def get_call_stack(depth: int = 20):
+        """
+        获取当前调用栈信息
+        
+        :param depth: 调用栈深度，默认20，最大100
+        :return: 调用栈信息
+        """
+        if depth <= 0 or depth > 100:
+            raise ValueError('调用栈深度必须在1-100之间!')
+        
+        try:
+            result = controller.get_call_stack(depth)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取调用栈失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_segments', description='获取内存段信息')
+    async def get_segments():
+        """
+        获取当前进程的内存段信息
+        
+        :return: 内存段列表
+        """
+        try:
+            result = controller.get_segments()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取内存段失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_strings', description='搜索字符串引用')
+    async def get_strings(min_length: int = 4):
+        """
+        搜索内存中的字符串引用
+        
+        :param min_length: 最小字符串长度，默认4
+        :return: 字符串引用列表
+        """
+        if min_length < 1:
+            raise ValueError('最小长度必须大于0!')
+        
+        try:
+            result = controller.get_strings(min_length)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"搜索字符串失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_references', description='获取地址引用')
+    async def get_references(address: str):
+        """
+        获取指定地址的交叉引用
+        
+        :param address: 要查询的地址，十六进制格式(0x401000)
+        :return: 引用列表
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        try:
+            result = controller.get_references(address)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取引用失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_imports', description='获取导入函数列表')
+    async def get_imports():
+        """
+        获取当前模块的导入函数列表
+        
+        :return: 导入函数列表
+        """
+        try:
+            result = controller.get_imports()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取导入函数失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_exports', description='获取导出函数列表')
+    async def get_exports():
+        """
+        获取当前模块的导出函数列表
+        
+        :return: 导出函数列表
+        """
+        try:
+            result = controller.get_exports()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取导出函数失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_comments', description='获取注释信息')
+    async def get_comments(address: str = ""):
+        """
+        获取注释信息
+        
+        :param address: 地址(可选)，如果提供则获取该地址的注释，否则获取所有注释
+        :return: 注释信息
+        """
+        try:
+            result = controller.get_comments(address)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取注释失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_labels', description='获取标签列表')
+    async def get_labels():
+        """
+        获取所有标签列表
+        
+        :return: 标签列表
+        """
+        try:
+            result = controller.get_labels()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取标签列表失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_functions', description='获取函数列表')
+    async def get_functions():
+        """
+        获取所有函数列表
+        
+        :return: 函数列表
+        """
+        try:
+            result = controller.get_functions()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取函数列表失败: {str(e)}"}
 
