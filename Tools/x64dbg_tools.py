@@ -260,6 +260,70 @@ except Exception as e:
         address = address.strip().replace(" ", "")
         return self.execute_command(f"bpd {address}")
     
+    def get_breakpoint_hit_count(self, address: str) -> Dict[str, Any]:
+        """
+        获取断点命中计数
+        
+        :param address: 断点地址
+        """
+        address = address.strip().replace(" ", "")
+        
+        try:
+            hit_count_script = f"""# X64Dbg Breakpoint Hit Count Script
+try:
+    import dbg
+    addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    
+    # 获取断点命中计数
+    if hasattr(dbg, 'getBreakpointHitCount'):
+        count = dbg.getBreakpointHitCount(addr)
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','hit_count':count}}")
+    else:
+        # 尝试通过命令获取
+        result = dbgcmd(f'bphitcount {{addr}}')
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(hit_count_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"获取断点命中计数失败: {str(e)}"
+            }
+    
+    def reset_breakpoint_hit_count(self, address: str) -> Dict[str, Any]:
+        """
+        重置断点命中计数
+        
+        :param address: 断点地址
+        """
+        address = address.strip().replace(" ", "")
+        
+        try:
+            reset_script = f"""# X64Dbg Reset Breakpoint Hit Count Script
+try:
+    import dbg
+    addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    
+    # 重置断点命中计数
+    if hasattr(dbg, 'resetBreakpointHitCount'):
+        result = dbg.resetBreakpointHitCount(addr)
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','result':result}}")
+    else:
+        # 尝试通过命令重置
+        result = dbgcmd(f'bpreset {{addr}}')
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(reset_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"重置断点命中计数失败: {str(e)}"
+            }
+    
     def read_memory(self, address: str, size: int = 64) -> Dict[str, Any]:
         """读取内存"""
         address = address.strip().replace(" ", "")
@@ -1831,6 +1895,40 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"禁用断点失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_breakpoint_hit_count', description='获取断点命中计数')
+    async def get_breakpoint_hit_count(address: str):
+        """
+        获取断点命中计数（断点被触发的次数）
+        
+        :param address: 断点地址，十六进制格式(0x401000)
+        :return: 命中计数信息
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        try:
+            result = controller.get_breakpoint_hit_count(address)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取断点命中计数失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_reset_breakpoint_hit_count', description='重置断点命中计数')
+    async def reset_breakpoint_hit_count(address: str):
+        """
+        重置断点命中计数（将计数清零）
+        
+        :param address: 断点地址，十六进制格式(0x401000)
+        :return: 重置结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        try:
+            result = controller.reset_breakpoint_hit_count(address)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"重置断点命中计数失败: {str(e)}"}
     
     @mcp.tool('x64dbg_capture_output', description='捕获命令执行的实际输出')
     async def capture_output(command: str):
