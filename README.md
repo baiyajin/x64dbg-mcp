@@ -8,6 +8,9 @@ X64Dbg的Model Context Protocol服务器，用于AI辅助逆向分析和调试�
 
 ## 功能特性
 
+<details>
+<summary>点击展开查看完整功能列表（共40+项）</summary>
+
 - ✅ 执行x64dbg调试命令
 - ✅ 获取寄存器信息
 - ✅ 获取模块列表
@@ -47,6 +50,8 @@ X64Dbg的Model Context Protocol服务器，用于AI辅助逆向分析和调试�
 - ✅ 脚本管理
 - ✅ 配置管理
 - ✅ 性能分析
+
+</details>
 
 ## 安装
 
@@ -373,6 +378,9 @@ Tools/
 
 ## 可用工具
 
+<details>
+<summary>点击展开查看所有可用工具（共88个工具）</summary>
+
 ### x64dbg_execute_command
 执行任意x64dbg调试命令
 
@@ -637,6 +645,8 @@ Tools/
 ### x64dbg_get_profiling_results
 获取性能分析结果
 
+</details>
+
 ## 注意事项
 
 1. **x64dbg必须已安装**：确保x64dbg已正确安装并配置路径
@@ -649,6 +659,9 @@ Tools/
 8. **结果解析**：新版本支持自动解析脚本执行结果，获取实际输出内容
 
 ## 故障排除
+
+<details>
+<summary>点击展开查看故障排除指南</summary>
 
 ### 问题：找不到x64dbg路径
 
@@ -697,11 +710,14 @@ Tools/
    ```
 3. 如果使用虚拟环境，确保激活虚拟环境或使用虚拟环境的Python路径
 
+</details>
+
 ## 更新日志
 
 查看完整的提交历史：[Git提交记录](https://github.com/baiyajin/x64dbg-mcp/commits/main)
 
-### 最近更新
+<details>
+<summary>点击展开查看最近更新</summary>
 
 - ✅ **docs: 移除已完成的开发计划部分** - 清理README，移除已完成的功能列表
 - ✅ **chore: 优化FastMCP日志输出配置** - 减少日志输出，优化启动体验
@@ -712,6 +728,8 @@ Tools/
 - ✅ **修复: 解决MCP协议JSON解析错误问题** - 修复f-string语法错误
 - ✅ **重构: 拆分大文件使其符合200行限制** - 模块化重构，遵循单一职责原则
 - ✅ **配置: 添加Cursor MCP服务器配置文件** - 添加MCP服务器配置示例
+
+</details>
 
 ## 许可证
 
