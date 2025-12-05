@@ -1967,6 +1967,109 @@ except Exception as e:
                 "status": "error",
                 "message": f"查看结构体失败: {str(e)}"
             }
+    
+    # ========== 脚本管理功能 ==========
+    
+    def save_script(self, script_content: str, file_path: str) -> Dict[str, Any]:
+        """
+        保存脚本到文件
+        
+        :param script_content: 脚本内容
+        :param file_path: 保存路径
+        """
+        if not script_content or script_content.strip() == "":
+            raise ValueError('脚本内容不能为空!')
+        
+        if not file_path or file_path.strip() == "":
+            raise ValueError('文件路径不能为空!')
+        
+        try:
+            # 确保目录存在
+            dir_path = os.path.dirname(file_path)
+            if dir_path and not os.path.exists(dir_path):
+                os.makedirs(dir_path, exist_ok=True)
+            
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(script_content)
+            
+            return {
+                "status": "success",
+                "file_path": file_path,
+                "size": len(script_content),
+                "message": f"脚本已保存到: {file_path}"
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"保存脚本失败: {str(e)}"
+            }
+    
+    def load_script(self, file_path: str) -> Dict[str, Any]:
+        """
+        从文件加载脚本
+        
+        :param file_path: 脚本文件路径
+        """
+        if not file_path or file_path.strip() == "":
+            raise ValueError('文件路径不能为空!')
+        
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"脚本文件不存在: {file_path}")
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                script_content = f.read()
+            
+            return {
+                "status": "success",
+                "file_path": file_path,
+                "content": script_content,
+                "size": len(script_content)
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"加载脚本失败: {str(e)}"
+            }
+    
+    def get_script_history(self, count: int = 20) -> Dict[str, Any]:
+        """
+        获取脚本执行历史
+        
+        :param count: 要获取的历史记录数量，默认20，最大100
+        """
+        if count <= 0 or count > 100:
+            count = 20
+        
+        try:
+            # 从临时脚本目录获取历史
+            history_files = []
+            if os.path.exists(self.temp_script_dir):
+                files = sorted(
+                    [f for f in os.listdir(self.temp_script_dir) if f.endswith('.py')],
+                    key=lambda x: os.path.getmtime(os.path.join(self.temp_script_dir, x)),
+                    reverse=True
+                )[:count]
+                
+                for f in files:
+                    file_path = os.path.join(self.temp_script_dir, f)
+                    history_files.append({
+                        "file_name": f,
+                        "file_path": file_path,
+                        "modified_time": os.path.getmtime(file_path),
+                        "size": os.path.getsize(file_path)
+                    })
+            
+            return {
+                "status": "success",
+                "count": len(history_files),
+                "history": history_files
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"获取脚本历史失败: {str(e)}"
+            }
 
 
 # 全局控制器实例
@@ -3403,4 +3506,61 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"查看结构体失败: {str(e)}"}
+    
+    # ========== 脚本管理功能 ==========
+    
+    @mcp.tool('x64dbg_save_script', description='保存脚本到文件')
+    async def save_script(script_content: str, file_path: str):
+        """
+        保存脚本到文件
+        
+        :param script_content: 脚本内容
+        :param file_path: 保存路径（完整路径）
+        :return: 保存结果
+        """
+        if not script_content or script_content.strip() == "":
+            raise ValueError('脚本内容不能为空!')
+        
+        if not file_path or file_path.strip() == "":
+            raise ValueError('文件路径不能为空!')
+        
+        try:
+            result = controller.save_script(script_content, file_path)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"保存脚本失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_load_script', description='从文件加载脚本')
+    async def load_script(file_path: str):
+        """
+        从文件加载脚本
+        
+        :param file_path: 脚本文件路径
+        :return: 脚本内容
+        """
+        if not file_path or file_path.strip() == "":
+            raise ValueError('文件路径不能为空!')
+        
+        try:
+            result = controller.load_script(file_path)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"加载脚本失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_script_history', description='获取脚本执行历史')
+    async def get_script_history(count: int = 20):
+        """
+        获取脚本执行历史（最近执行的脚本文件列表）
+        
+        :param count: 要获取的历史记录数量，默认20，最大100
+        :return: 脚本历史列表
+        """
+        if count <= 0 or count > 100:
+            raise ValueError('历史记录数量必须在1-100之间!')
+        
+        try:
+            result = controller.get_script_history(count)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取脚本历史失败: {str(e)}"}
 
