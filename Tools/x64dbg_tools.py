@@ -1791,6 +1791,109 @@ except Exception as e:
                 "status": "error",
                 "message": f"计算表达式失败: {str(e)}"
             }
+    
+    # ========== 批量操作功能 ==========
+    
+    def batch_set_breakpoints(self, addresses: List[str]) -> Dict[str, Any]:
+        """
+        批量设置断点
+        
+        :param addresses: 地址列表
+        """
+        if not addresses or len(addresses) == 0:
+            raise ValueError('地址列表不能为空!')
+        
+        if len(addresses) > 1000:
+            raise ValueError('一次最多设置1000个断点!')
+        
+        try:
+            results = {}
+            for addr in addresses:
+                result = self.set_breakpoint(addr)
+                results[addr] = result
+            
+            success_count = sum(1 for r in results.values() if r.get("status") == "success")
+            return {
+                "status": "success",
+                "total": len(addresses),
+                "success": success_count,
+                "failed": len(addresses) - success_count,
+                "results": results
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"批量设置断点失败: {str(e)}"
+            }
+    
+    def batch_remove_breakpoints(self, addresses: List[str]) -> Dict[str, Any]:
+        """
+        批量删除断点
+        
+        :param addresses: 地址列表
+        """
+        if not addresses or len(addresses) == 0:
+            raise ValueError('地址列表不能为空!')
+        
+        if len(addresses) > 1000:
+            raise ValueError('一次最多删除1000个断点!')
+        
+        try:
+            results = {}
+            for addr in addresses:
+                result = self.remove_breakpoint(addr)
+                results[addr] = result
+            
+            success_count = sum(1 for r in results.values() if r.get("status") == "success")
+            return {
+                "status": "success",
+                "total": len(addresses),
+                "success": success_count,
+                "failed": len(addresses) - success_count,
+                "results": results
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"批量删除断点失败: {str(e)}"
+            }
+    
+    def batch_read_memory(self, addresses: List[str], sizes: List[int] = None) -> Dict[str, Any]:
+        """
+        批量读取内存
+        
+        :param addresses: 地址列表
+        :param sizes: 大小列表（可选，如果不提供则使用默认大小64）
+        """
+        if not addresses or len(addresses) == 0:
+            raise ValueError('地址列表不能为空!')
+        
+        if len(addresses) > 100:
+            raise ValueError('一次最多读取100个地址!')
+        
+        if sizes and len(sizes) != len(addresses):
+            raise ValueError('大小列表长度必须与地址列表长度相同!')
+        
+        if not sizes:
+            sizes = [64] * len(addresses)
+        
+        try:
+            results = {}
+            for i, addr in enumerate(addresses):
+                size = sizes[i] if i < len(sizes) else 64
+                result = self.read_memory(addr, size)
+                results[addr] = result
+            
+            return {
+                "status": "success",
+                "total": len(addresses),
+                "results": results
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"批量读取内存失败: {str(e)}"
+            }
 
 
 # 全局控制器实例
@@ -3118,4 +3221,85 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"计算表达式失败: {str(e)}"}
+    
+    # ========== 批量操作功能 ==========
+    
+    @mcp.tool('x64dbg_batch_set_breakpoints', description='批量设置断点')
+    async def batch_set_breakpoints(addresses: str):
+        """
+        批量设置断点
+        
+        :param addresses: 地址JSON数组字符串，例如: '["0x401000", "0x402000", "0x403000"]'
+        :return: 批量设置结果，包含成功和失败数量
+        """
+        if not addresses or addresses.strip() == "":
+            raise ValueError('地址列表不能为空!')
+        
+        try:
+            import json
+            addr_list = json.loads(addresses)
+            if not isinstance(addr_list, list):
+                raise ValueError('地址必须是数组格式!')
+            
+            result = controller.batch_set_breakpoints(addr_list)
+            return result
+        except json.JSONDecodeError:
+            return {"status": "error", "message": "地址格式错误，必须是有效的JSON数组格式"}
+        except Exception as e:
+            return {"status": "error", "message": f"批量设置断点失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_batch_remove_breakpoints', description='批量删除断点')
+    async def batch_remove_breakpoints(addresses: str):
+        """
+        批量删除断点
+        
+        :param addresses: 地址JSON数组字符串，例如: '["0x401000", "0x402000"]'
+        :return: 批量删除结果，包含成功和失败数量
+        """
+        if not addresses or addresses.strip() == "":
+            raise ValueError('地址列表不能为空!')
+        
+        try:
+            import json
+            addr_list = json.loads(addresses)
+            if not isinstance(addr_list, list):
+                raise ValueError('地址必须是数组格式!')
+            
+            result = controller.batch_remove_breakpoints(addr_list)
+            return result
+        except json.JSONDecodeError:
+            return {"status": "error", "message": "地址格式错误，必须是有效的JSON数组格式"}
+        except Exception as e:
+            return {"status": "error", "message": f"批量删除断点失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_batch_read_memory', description='批量读取内存')
+    async def batch_read_memory(addresses: str, sizes: str = ""):
+        """
+        批量读取内存
+        
+        :param addresses: 地址JSON数组字符串，例如: '["0x401000", "0x402000"]'
+        :param sizes: 大小JSON数组字符串（可选），例如: '[64, 128]'，如果不提供则使用默认大小64
+        :return: 批量读取结果
+        """
+        if not addresses or addresses.strip() == "":
+            raise ValueError('地址列表不能为空!')
+        
+        try:
+            import json
+            addr_list = json.loads(addresses)
+            if not isinstance(addr_list, list):
+                raise ValueError('地址必须是数组格式!')
+            
+            size_list = None
+            if sizes and sizes.strip():
+                size_list = json.loads(sizes)
+                if not isinstance(size_list, list):
+                    raise ValueError('大小必须是数组格式!')
+            
+            result = controller.batch_read_memory(addr_list, size_list)
+            return result
+        except json.JSONDecodeError:
+            return {"status": "error", "message": "格式错误，必须是有效的JSON数组格式"}
+        except Exception as e:
+            return {"status": "error", "message": f"批量读取内存失败: {str(e)}"}
 
