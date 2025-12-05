@@ -232,13 +232,19 @@ Cursor支持通过项目配置文件或全局配置文件来设置MCP服务器�
 
 由于x64dbg主要通过GUI和插件系统工作，本MCP服务采用以下方式：
 
-1. **脚本文件方式**：MCP服务创建Python脚本文件到x64dbg的plugins目录
-2. **手动加载**：在x64dbg中通过 `File -> Script -> Load` 加载脚本执行命令
-3. **自动执行**：如果x64dbg支持命令行参数或插件API，可以自动执行
+1. **自动执行（推荐）**：MCP服务尝试通过x64dbg的Python插件API自动执行脚本。如果x64dbg正在运行且支持API调用，命令将自动执行。
+2. **脚本文件方式**：如果自动执行失败，MCP服务会创建Python脚本文件到x64dbg的plugins目录
+3. **手动加载**：在x64dbg中通过 `File -> Script -> Load` 加载脚本执行命令（仅在自动执行不可用时需要）
 
 ### 脚本文件位置
 
 脚本文件保存在：`[x64dbg安装目录]/release/x64/plugins/mcp_temp/`
+
+### 自动执行机制
+
+- 当x64dbg的Python插件环境可用时，脚本会自动执行
+- 如果不在x64dbg环境中，脚本会保存到文件，等待手动加载
+- 所有命令默认启用自动执行，可通过参数控制
 
 ## 可用工具
 
@@ -284,12 +290,58 @@ Cursor支持通过项目配置文件或全局配置文件来设置MCP服务器�
 ### x64dbg_search_memory
 在内存中搜索指定模式
 
+### x64dbg_get_debugger_status
+获取调试器实时状态（是否调试中、运行状态、当前PID/TID、地址等）
+
+### x64dbg_set_breakpoint_conditional
+设置带条件的断点（例如：当eax==0x100时触发）
+
+### x64dbg_dump_memory
+将内存转储到文件（支持最大10MB）
+
+### x64dbg_resolve_symbol
+解析符号名称到内存地址（例如：MessageBoxA, kernel32.CreateFile）
+
+### x64dbg_get_threads
+获取线程列表
+
+### x64dbg_get_breakpoints
+获取所有断点列表
+
+### x64dbg_get_call_stack
+获取调用栈信息
+
+### x64dbg_get_segments
+获取内存段信息
+
+### x64dbg_get_strings
+搜索字符串引用
+
+### x64dbg_get_references
+获取地址的交叉引用
+
+### x64dbg_get_imports
+获取导入函数列表
+
+### x64dbg_get_exports
+获取导出函数列表
+
+### x64dbg_get_comments
+获取注释信息
+
+### x64dbg_get_labels
+获取标签列表
+
+### x64dbg_get_functions
+获取函数列表
+
 ## 注意事项
 
 1. **x64dbg必须已安装**：确保x64dbg已正确安装并配置路径
 2. **Python插件**：x64dbg需要支持Python插件（通常自带）
 3. **权限问题**：确保有权限在x64dbg插件目录创建文件
-4. **手动操作**：某些操作可能需要手动在x64dbg中加载脚本文件
+4. **自动执行**：新版本支持自动执行脚本，如果x64dbg正在运行且支持API，命令会自动执行
+5. **手动操作**：如果自动执行失败，某些操作可能需要手动在x64dbg中加载脚本文件
 5. **调试模式**：建议在调试模式下使用，查看详细日志
 6. **Cursor版本**：确保使用支持MCP的Cursor版本（通常需要较新版本）
 
@@ -344,12 +396,14 @@ Cursor支持通过项目配置文件或全局配置文件来设置MCP服务器�
 
 ## 开发计划
 
-- [ ] 支持自动执行脚本（通过插件API）
-- [ ] 支持实时获取调试器状态
-- [ ] 支持更多x64dbg命令
-- [ ] 支持断点条件设置
-- [ ] 支持内存转储功能
-- [ ] 支持符号解析
+- [x] 支持自动执行脚本（通过插件API）✅
+- [x] 支持实时获取调试器状态 ✅
+- [x] 支持更多x64dbg命令 ✅
+- [x] 支持断点条件设置 ✅
+- [x] 支持内存转储功能 ✅
+- [x] 支持符号解析 ✅
+
+所有计划功能已完成！🎉
 
 ## 许可证
 
