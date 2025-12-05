@@ -5,7 +5,7 @@ Model Context Protocol服务器，用于AI辅助逆向分析和调试
 import logging
 import sys
 from fastmcp import FastMCP
-from Tools.x64dbg_tools import register_tools
+from Tools.registry import register_tools
 
 # 配置标准输入输出编码
 stdin = sys.stdin
