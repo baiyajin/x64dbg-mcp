@@ -190,6 +190,51 @@ except Exception as e:
         """获取寄存器信息"""
         return self.execute_command("r")
     
+    def set_register(self, register_name: str, value: str) -> Dict[str, Any]:
+        """
+        设置单个寄存器值
+        
+        :param register_name: 寄存器名称（如: eax, ebx, eip, rax等）
+        :param value: 寄存器值（可以是十六进制0x401000或十进制）
+        """
+        register_name = register_name.strip().lower()
+        value = value.strip()
+        
+        try:
+            # 使用x64dbg命令设置寄存器
+            return self.execute_command(f"set {register_name}={value}")
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"设置寄存器失败: {str(e)}"
+            }
+    
+    def set_registers(self, registers: Dict[str, str]) -> Dict[str, Any]:
+        """
+        批量设置寄存器值
+        
+        :param registers: 寄存器字典，格式: {"eax": "0x401000", "ebx": "0x100"}
+        """
+        if not registers:
+            raise ValueError('寄存器字典不能为空!')
+        
+        try:
+            results = {}
+            for reg_name, reg_value in registers.items():
+                result = self.set_register(reg_name, reg_value)
+                results[reg_name] = result
+            
+            return {
+                "status": "success",
+                "results": results,
+                "message": f"已设置{len(registers)}个寄存器"
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"批量设置寄存器失败: {str(e)}"
+            }
+    
     def get_modules(self) -> Dict[str, Any]:
         """获取模块列表"""
         return self.execute_command("mod")
@@ -1278,6 +1323,52 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"获取寄存器失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_set_register', description='设置单个寄存器值')
+    async def set_register(register_name: str, value: str):
+        """
+        设置单个寄存器值
+        
+        :param register_name: 寄存器名称（如: eax, ebx, eip, rax等）
+        :param value: 寄存器值，可以是十六进制格式(0x401000)或十进制格式
+        :return: 设置结果
+        """
+        if not register_name or register_name.strip() == "":
+            raise ValueError('寄存器名称不能为空!')
+        
+        if not value or value.strip() == "":
+            raise ValueError('寄存器值不能为空!')
+        
+        try:
+            result = controller.set_register(register_name, value)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"设置寄存器失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_set_registers', description='批量设置寄存器值')
+    async def set_registers(registers: str):
+        """
+        批量设置寄存器值
+        
+        :param registers: 寄存器JSON字符串，格式: {"eax": "0x401000", "ebx": "0x100"}
+        :return: 设置结果
+        """
+        if not registers or registers.strip() == "":
+            raise ValueError('寄存器字典不能为空!')
+        
+        try:
+            # 解析JSON字符串
+            import json
+            reg_dict = json.loads(registers)
+            if not isinstance(reg_dict, dict):
+                raise ValueError('寄存器必须是字典格式!')
+            
+            result = controller.set_registers(reg_dict)
+            return result
+        except json.JSONDecodeError:
+            return {"status": "error", "message": "寄存器格式错误，必须是有效的JSON格式"}
+        except Exception as e:
+            return {"status": "error", "message": f"批量设置寄存器失败: {str(e)}"}
     
     @mcp.tool('x64dbg_get_modules', description='获取已加载的模块列表')
     async def get_modules():
