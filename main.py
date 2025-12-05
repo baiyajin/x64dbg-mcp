@@ -4,6 +4,7 @@ Model Context Protocol服务器，用于AI辅助逆向分析和调试
 """
 import logging
 import sys
+import io
 from fastmcp import FastMCP
 from Tools.registry import register_tools
 
@@ -14,6 +15,14 @@ if hasattr(stdin, 'reconfigure'):
     stdin.reconfigure(encoding='utf-8')
 if hasattr(stdout, 'reconfigure'):
     stdout.reconfigure(encoding='utf-8')
+
+# 配置stderr编码为UTF-8，避免中文乱码
+if sys.stderr.encoding != 'utf-8':
+    try:
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except (AttributeError, ValueError):
+        # 如果无法重新配置，使用默认编码
+        pass
 
 # 配置日志 - 输出到stderr，避免干扰MCP协议的stdout JSON通信
 logging.basicConfig(

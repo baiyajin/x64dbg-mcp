@@ -31,7 +31,8 @@ class X64DbgController:
                 os.makedirs(self.temp_script_dir, exist_ok=True)
             except Exception as e:
                 # 输出到stderr，避免干扰MCP协议的stdout JSON通信
-                print(f"警告: 无法创建临时脚本目录: {e}", file=sys.stderr)
+                # 使用英文消息避免编码问题
+                print(f"Warning: Cannot create temp script directory: {e}", file=sys.stderr)
                 self.temp_script_dir = tempfile.gettempdir()
     
     def _create_script_file(self, script_content: str) -> str:

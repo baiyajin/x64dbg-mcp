@@ -32,8 +32,9 @@ class ScriptExecutor:
                 os.makedirs(self.temp_script_dir, exist_ok=True)
             except Exception as e:
                 # 使用stderr输出警告，避免干扰MCP协议的stdout JSON通信
-                print(f"警告: 无法创建临时脚本目录: {e}", file=sys.stderr)
-                logger.warning(f"无法创建临时脚本目录: {e}，将使用系统临时目录")
+                # 使用英文消息避免编码问题
+                print(f"Warning: Cannot create temp script directory: {e}", file=sys.stderr)
+                logger.warning(f"Cannot create temp script directory: {e}, using system temp dir")
                 self.temp_script_dir = tempfile.gettempdir()
     
     def create_script_file(self, script_content: str) -> str:
