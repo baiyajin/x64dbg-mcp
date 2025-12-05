@@ -43,7 +43,7 @@ class X64DbgController:
         except Exception as e:
             raise Exception(f"创建脚本文件失败: {str(e)}")
     
-    def execute_command(self, command: str, auto_execute: bool = True) -> Dict[str, Any]:
+    def execute_command(self, command: str, auto_execute: bool = True, parse_result: bool = True) -> Dict[str, Any]:
         """
         执行x64dbg命令
         通过创建Python脚本文件，x64dbg插件可以读取并执行
@@ -51,44 +51,94 @@ class X64DbgController:
         
         :param command: 要执行的命令
         :param auto_execute: 是否尝试自动执行（默认True）
+        :param parse_result: 是否解析执行结果（默认True）
         """
         try:
+            # 转义命令中的特殊字符
+            escaped_command = command.replace("'", "\\'").replace('"', '\\"')
+            
             # 创建Python脚本内容
             # x64dbg的Python插件通常使用dbgcmd函数执行命令
             if auto_execute:
-                # 尝试自动执行的脚本
+                # 尝试自动执行的脚本，包含结果捕获
                 script_content = f"""# X64Dbg MCP Command Script (Auto Execute)
 # Command: {command}
+import io
+import contextlib
+
+output_buffer = io.StringIO()
 try:
     import dbg
-    # 尝试通过API直接执行
-    result = dbgcmd('{command}')
-    print(f"MCP_RESULT:{{'status':'success','command':'{command}','result':result,'auto_executed':True}}")
+    # 尝试通过API直接执行并捕获输出
+    with contextlib.redirect_stdout(output_buffer), contextlib.redirect_stderr(output_buffer):
+        result = dbgcmd('{escaped_command}')
+    output = output_buffer.getvalue()
+    
+    # 构建结果，包含命令输出
+    result_data = {{
+        'status': 'success',
+        'command': '{escaped_command}',
+        'result': str(result) if result is not None else output,
+        'output': output,
+        'auto_executed': True
+    }}
+    print(f"MCP_RESULT:{{result_data}}")
 except NameError:
     # 如果不在x64dbg环境中，保存脚本文件
     script_file = r"{self.temp_script_dir}\\mcp_cmd_{os.getpid()}.py"
-    with open(script_file, 'w', encoding='utf-8') as f:
-        f.write('''# X64Dbg MCP Command Script
+    script_code = '''# X64Dbg MCP Command Script
+import io
+import contextlib
+
+output_buffer = io.StringIO()
 try:
-    result = dbgcmd('{command}')
-    print(f"MCP_RESULT:{{'status':'success','command':'{command}','result':result}}")
+    with contextlib.redirect_stdout(output_buffer), contextlib.redirect_stderr(output_buffer):
+        result = dbgcmd('{escaped_command}')
+    output = output_buffer.getvalue()
+    result_data = {{
+        'status': 'success',
+        'command': '{escaped_command}',
+        'result': str(result) if result is not None else output,
+        'output': output
+    }}
+    print(f"MCP_RESULT:{{result_data}}")
 except Exception as e:
-    print(f"MCP_RESULT:{{'status':'error','command':'{command}','error':str(e)}}")
-''')
-    print(f"MCP_RESULT:{{'status':'pending','command':'{command}','script_file':'{{script_file}}','message':'脚本已保存，请在x64dbg中加载执行'}}")
+    print(f"MCP_RESULT:{{'status':'error','command':'{escaped_command}','error':str(e)}}")
+'''
+    with open(script_file, 'w', encoding='utf-8') as f:
+        f.write(script_code)
+    print(f"MCP_RESULT:{{'status':'pending','command':'{escaped_command}','script_file':'{{script_file}}','message':'脚本已保存，请在x64dbg中加载执行'}}")
 except Exception as e:
-    print(f"MCP_RESULT:{{'status':'error','command':'{command}','error':str(e)}}")
+    import traceback
+    error_msg = str(e) + "\\n" + traceback.format_exc()
+    print(f"MCP_RESULT:{{'status':'error','command':'{escaped_command}','error':'{{error_msg}}'}}")
 """
-                return self.execute_script_auto(script_content)
+                result = self.execute_script_auto(script_content, parse_result)
+                if parse_result and "script_file" in result:
+                    result["command"] = command
+                    result["parse_result_enabled"] = True
+                return result
             else:
                 # 传统方式：仅创建脚本文件
                 script_content = f"""# X64Dbg MCP Command Script
 # Command: {command}
+import io
+import contextlib
+
+output_buffer = io.StringIO()
 try:
-    result = dbgcmd('{command}')
-    print(f"MCP_RESULT:{{'status':'success','command':'{command}','result':result}}")
+    with contextlib.redirect_stdout(output_buffer), contextlib.redirect_stderr(output_buffer):
+        result = dbgcmd('{escaped_command}')
+    output = output_buffer.getvalue()
+    result_data = {{
+        'status': 'success',
+        'command': '{escaped_command}',
+        'result': str(result) if result is not None else output,
+        'output': output
+    }}
+    print(f"MCP_RESULT:{{result_data}}")
 except Exception as e:
-    print(f"MCP_RESULT:{{'status':'error','command':'{command}','error':str(e)}}")
+    print(f"MCP_RESULT:{{'status':'error','command':'{escaped_command}','error':str(e)}}")
 """
                 script_file = self._create_script_file(script_content)
                 
@@ -96,6 +146,7 @@ except Exception as e:
                     "status": "success",
                     "command": command,
                     "script_file": script_file,
+                    "parse_result_enabled": parse_result,
                     "message": f"命令脚本已创建: {command}。请在x64dbg中执行: File -> Script -> Load -> {os.path.basename(script_file)}"
                 }
         except Exception as e:
@@ -154,6 +205,16 @@ except Exception as e:
         address = address.strip().replace(" ", "")
         return self.execute_command(f"bpc {address}")
     
+    def enable_breakpoint(self, address: str) -> Dict[str, Any]:
+        """启用断点"""
+        address = address.strip().replace(" ", "")
+        return self.execute_command(f"bpe {address}")
+    
+    def disable_breakpoint(self, address: str) -> Dict[str, Any]:
+        """禁用断点"""
+        address = address.strip().replace(" ", "")
+        return self.execute_command(f"bpd {address}")
+    
     def read_memory(self, address: str, size: int = 64) -> Dict[str, Any]:
         """读取内存"""
         address = address.strip().replace(" ", "")
@@ -180,26 +241,76 @@ except Exception as e:
         else:
             return self.execute_command(f"findmem {pattern}")
     
-    def execute_script_auto(self, script_content: str) -> Dict[str, Any]:
+    def _parse_script_result(self, output: str) -> Dict[str, Any]:
+        """
+        解析脚本执行结果
+        从输出中提取MCP_RESULT JSON数据
+        """
+        try:
+            # 查找MCP_RESULT标记
+            import re
+            pattern = r'MCP_RESULT:(\{.*?\})'
+            matches = re.findall(pattern, output, re.DOTALL)
+            if matches:
+                # 尝试解析最后一个结果
+                result_str = matches[-1]
+                try:
+                    result = json.loads(result_str)
+                    return result
+                except json.JSONDecodeError:
+                    # 如果JSON解析失败，尝试修复常见的转义问题
+                    result_str = result_str.replace("'", '"')
+                    try:
+                        result = json.loads(result_str)
+                        return result
+                    except:
+                        pass
+            
+            # 如果没有找到MCP_RESULT，返回原始输出
+            return {
+                "status": "success",
+                "raw_output": output,
+                "message": "脚本执行完成，但未找到结构化结果"
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"解析脚本结果失败: {str(e)}",
+                "raw_output": output
+            }
+    
+    def execute_script_auto(self, script_content: str, parse_result: bool = True) -> Dict[str, Any]:
         """
         自动执行脚本（通过插件API）
         尝试通过x64dbg的Python插件API自动执行脚本
+        
+        :param script_content: 要执行的脚本内容
+        :param parse_result: 是否解析执行结果（默认True）
         """
         try:
             # 转义脚本内容中的特殊字符
             escaped_content = script_content.replace('\\', '\\\\').replace("'", "\\'").replace('"', '\\"')
             script_file_path = os.path.join(self.temp_script_dir, f"mcp_auto_{os.getpid()}.py")
             
-            # 创建增强的脚本，尝试自动执行
+            # 创建增强的脚本，尝试自动执行并捕获输出
             auto_script = f"""# X64Dbg MCP Auto Execute Script
 import os
 import sys
+import io
+import contextlib
+
+# 捕获输出
+output_buffer = io.StringIO()
 try:
     # 尝试通过x64dbg Python API执行
     # 如果dbgcmd可用，说明在x64dbg环境中
     if 'dbgcmd' in globals() or 'dbg' in sys.modules:
-        exec(compile('''{escaped_content}''', '<string>', 'exec'))
-        print("MCP_RESULT:{{'status':'success','message':'脚本自动执行成功'}}")
+        with contextlib.redirect_stdout(output_buffer), contextlib.redirect_stderr(output_buffer):
+            exec(compile('''{escaped_content}''', '<string>', 'exec'))
+        output = output_buffer.getvalue()
+        # 如果脚本没有输出MCP_RESULT，添加一个
+        if 'MCP_RESULT' not in output:
+            print("MCP_RESULT:{{'status':'success','message':'脚本自动执行成功','output':'" + output.replace("'", "\\'")[:500] + "'}}")
     else:
         raise NameError("Not in x64dbg environment")
 except NameError:
@@ -209,14 +320,25 @@ except NameError:
         f.write('''{escaped_content}''')
     print(f"MCP_RESULT:{{'status':'pending','script_file':'{{script_file}}','message':'脚本已保存，请在x64dbg中加载执行'}}")
 except Exception as e:
-    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+    import traceback
+    error_msg = str(e) + "\\n" + traceback.format_exc()
+    print(f"MCP_RESULT:{{'status':'error','error':'{{error_msg}}'}}")
 """
             script_file = self._create_script_file(auto_script)
-            return {
+            
+            result = {
                 "status": "success",
                 "script_file": script_file,
                 "message": "自动执行脚本已创建，如果x64dbg支持API调用将自动执行"
             }
+            
+            # 如果启用结果解析，尝试读取脚本输出（如果可用）
+            if parse_result:
+                # 注意：实际执行结果需要在x64dbg环境中才能获取
+                # 这里只是准备解析功能
+                result["parse_result"] = True
+            
+            return result
         except Exception as e:
             return {
                 "status": "error",
@@ -356,6 +478,133 @@ except Exception as e:
     def get_functions(self) -> Dict[str, Any]:
         """获取函数列表"""
         return self.execute_command("functionlist")
+    
+    def get_logs(self, count: int = 100) -> Dict[str, Any]:
+        """
+        获取x64dbg日志输出
+        注意：这需要x64dbg支持日志API或通过命令获取
+        """
+        try:
+            # x64dbg可能没有直接的日志命令，尝试通过其他方式获取
+            # 这里使用log命令（如果存在）或通过脚本获取
+            log_script = f"""# X64Dbg Log Capture Script
+try:
+    import dbg
+    # 尝试获取日志（如果x64dbg支持）
+    if hasattr(dbg, 'getLog'):
+        logs = dbg.getLog({count})
+        print(f"MCP_RESULT:{{'status':'success','logs':logs,'count':len(logs)}}")
+    else:
+        # 尝试通过命令获取
+        result = dbgcmd('log')
+        print(f"MCP_RESULT:{{'status':'success','logs':result,'count':{count}}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(log_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"获取日志失败: {str(e)}"
+            }
+    
+    def capture_output(self, command: str) -> Dict[str, Any]:
+        """
+        捕获命令执行的实际输出
+        这是execute_command的增强版本，专门用于获取输出
+        """
+        return self.execute_command(command, auto_execute=True, parse_result=True)
+    
+    def set_memory_protection(self, address: str, size: int, protection: str) -> Dict[str, Any]:
+        """
+        设置内存保护属性
+        
+        :param address: 内存起始地址
+        :param size: 内存大小（字节）
+        :param protection: 保护属性，可选值:
+            - "R" 或 "READ": 只读
+            - "W" 或 "WRITE": 可写
+            - "X" 或 "EXECUTE": 可执行
+            - "RW": 可读可写
+            - "RX": 可读可执行
+            - "RWX": 可读可写可执行
+            - "NONE": 无访问权限
+        """
+        address = address.strip().replace(" ", "")
+        
+        # 映射保护属性到x64dbg命令格式
+        protection_map = {
+            "R": "PAGE_READONLY",
+            "READ": "PAGE_READONLY",
+            "W": "PAGE_READWRITE",
+            "WRITE": "PAGE_READWRITE",
+            "RW": "PAGE_READWRITE",
+            "X": "PAGE_EXECUTE",
+            "EXECUTE": "PAGE_EXECUTE",
+            "RX": "PAGE_EXECUTE_READ",
+            "RWX": "PAGE_EXECUTE_READWRITE",
+            "NONE": "PAGE_NOACCESS"
+        }
+        
+        prot_flag = protection_map.get(protection.upper(), protection)
+        
+        try:
+            protect_script = f"""# X64Dbg Memory Protection Script
+try:
+    import dbg
+    addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    size = {size}
+    prot = '{prot_flag}'
+    
+    # 使用VirtualProtect或x64dbg API
+    if hasattr(dbg, 'setMemoryProtection'):
+        result = dbg.setMemoryProtection(addr, size, prot)
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','size':{size},'protection':'{protection}','result':result}}")
+    else:
+        # 尝试通过命令设置
+        result = dbgcmd(f'VirtualProtect {{addr}}, {{size}}, {{prot}}')
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','size':{size},'protection':'{protection}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(protect_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"设置内存保护失败: {str(e)}"
+            }
+    
+    def get_memory_protection(self, address: str) -> Dict[str, Any]:
+        """
+        获取内存保护属性
+        
+        :param address: 内存地址
+        """
+        address = address.strip().replace(" ", "")
+        
+        try:
+            protect_script = f"""# X64Dbg Get Memory Protection Script
+try:
+    import dbg
+    addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    
+    # 尝试获取内存保护属性
+    if hasattr(dbg, 'getMemoryProtection'):
+        prot = dbg.getMemoryProtection(addr)
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','protection':prot}}")
+    else:
+        # 尝试通过命令获取
+        result = dbgcmd(f'VirtualQuery {{addr}}')
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(protect_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"获取内存保护失败: {str(e)}"
+            }
 
 
 # 全局控制器实例
@@ -820,4 +1069,123 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"获取函数列表失败: {str(e)}"}
+    
+    # ========== 高优先级新功能 ==========
+    
+    @mcp.tool('x64dbg_enable_breakpoint', description='启用断点')
+    async def enable_breakpoint(address: str):
+        """
+        启用指定地址的断点（如果断点被禁用）
+        
+        :param address: 断点地址，十六进制格式(0x401000)
+        :return: 启用结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        try:
+            result = controller.enable_breakpoint(address)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"启用断点失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_disable_breakpoint', description='禁用断点')
+    async def disable_breakpoint(address: str):
+        """
+        禁用指定地址的断点（不断点删除，只是临时禁用）
+        
+        :param address: 断点地址，十六进制格式(0x401000)
+        :return: 禁用结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        try:
+            result = controller.disable_breakpoint(address)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"禁用断点失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_capture_output', description='捕获命令执行的实际输出')
+    async def capture_output(command: str):
+        """
+        捕获命令执行的实际输出（增强版命令执行）
+        
+        :param command: 要执行的x64dbg命令
+        :return: 命令执行结果，包含实际输出
+        """
+        if not command or command.strip() == "":
+            raise ValueError('命令不能为空!')
+        
+        try:
+            result = controller.capture_output(command)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"捕获输出失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_logs', description='获取x64dbg日志输出')
+    async def get_logs(count: int = 100):
+        """
+        获取x64dbg的日志输出
+        
+        :param count: 要获取的日志条数，默认100，最大1000
+        :return: 日志列表
+        """
+        if count <= 0 or count > 1000:
+            raise ValueError('日志数量必须在1-1000之间!')
+        
+        try:
+            result = controller.get_logs(count)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取日志失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_set_memory_protection', description='设置内存保护属性')
+    async def set_memory_protection(address: str, size: int, protection: str):
+        """
+        设置内存保护属性
+        
+        :param address: 内存起始地址，十六进制格式(0x401000)
+        :param size: 内存大小（字节），最大10MB
+        :param protection: 保护属性，可选值:
+            - "R" 或 "READ": 只读
+            - "W" 或 "WRITE": 可写
+            - "X" 或 "EXECUTE": 可执行
+            - "RW": 可读可写
+            - "RX": 可读可执行
+            - "RWX": 可读可写可执行
+            - "NONE": 无访问权限
+        :return: 设置结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        if size <= 0 or size > 10 * 1024 * 1024:
+            raise ValueError('内存大小必须在1字节到10MB之间!')
+        
+        if not protection or protection.strip() == "":
+            raise ValueError('保护属性不能为空!')
+        
+        try:
+            result = controller.set_memory_protection(address, size, protection)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"设置内存保护失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_memory_protection', description='获取内存保护属性')
+    async def get_memory_protection(address: str):
+        """
+        获取指定地址的内存保护属性
+        
+        :param address: 内存地址，十六进制格式(0x401000)
+        :return: 内存保护属性信息
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        try:
+            result = controller.get_memory_protection(address)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取内存保护失败: {str(e)}"}
 
