@@ -721,6 +721,15 @@ Tools/
 
 欢迎提交Issue和Pull Request！
 
+## 支持项目
+
+如果这个项目对你有帮助，欢迎通过微信赞赏支持开发者继续改进项目！
+
+<div align="center">
+  <img src="wechat_reward.jpg" alt="微信赞赏码" width="300">
+  <p><em>你的鼓励是我改BUG的动力 💪</em></p>
+</div>
+
 ## 相关链接
 
 - [x64dbg官网](https://x64dbg.com/)
