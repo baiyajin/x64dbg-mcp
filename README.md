@@ -20,6 +20,10 @@ X64Dbg的Model Context Protocol服务器，用于AI辅助逆向分析和调试�
 - ✅ 日志输出捕获
 - ✅ 内存转储功能
 - ✅ 符号解析
+- ✅ 硬件断点支持
+- ✅ 数据断点（监视点）
+- ✅ 进程附加/分离
+- ✅ 代码补丁管理
 
 ## 安装
 
@@ -358,6 +362,33 @@ Cursor支持通过项目配置文件或全局配置文件来设置MCP服务器�
 
 ### x64dbg_get_memory_protection
 获取内存保护属性
+
+### x64dbg_set_hardware_breakpoint
+设置硬件断点（支持执行、写入、读取、读写断点）
+
+### x64dbg_remove_hardware_breakpoint
+删除硬件断点
+
+### x64dbg_set_watchpoint
+设置数据断点（监视点），用于监控内存访问
+
+### x64dbg_remove_watchpoint
+删除数据断点（监视点）
+
+### x64dbg_attach_process
+附加到正在运行的进程进行调试
+
+### x64dbg_detach_process
+分离当前调试的进程（不断点终止进程）
+
+### x64dbg_apply_patch
+应用代码补丁（修改代码）
+
+### x64dbg_remove_patch
+移除代码补丁（恢复原始代码）
+
+### x64dbg_get_patches
+获取所有补丁列表
 
 ## 注意事项
 
