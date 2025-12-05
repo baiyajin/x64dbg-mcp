@@ -605,6 +605,201 @@ except Exception as e:
                 "status": "error",
                 "message": f"获取内存保护失败: {str(e)}"
             }
+    
+    # ========== 中优先级功能 ==========
+    
+    def set_hardware_breakpoint(self, address: str, break_type: str = "execute", size: int = 1) -> Dict[str, Any]:
+        """
+        设置硬件断点
+        
+        :param address: 断点地址
+        :param break_type: 断点类型，可选值:
+            - "execute" 或 "e": 执行断点
+            - "write" 或 "w": 写入断点
+            - "read" 或 "r": 读取断点
+            - "readwrite" 或 "rw": 读写断点
+        :param size: 断点大小（字节），可选值: 1, 2, 4, 8
+        """
+        address = address.strip().replace(" ", "")
+        
+        # 映射断点类型
+        type_map = {
+            "execute": "0",
+            "e": "0",
+            "write": "1",
+            "w": "1",
+            "read": "2",
+            "r": "2",
+            "readwrite": "3",
+            "rw": "3"
+        }
+        
+        bp_type = type_map.get(break_type.lower(), "0")
+        
+        if size not in [1, 2, 4, 8]:
+            size = 1
+        
+        try:
+            hwbp_script = f"""# X64Dbg Hardware Breakpoint Script
+try:
+    import dbg
+    addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    bp_type = {bp_type}
+    bp_size = {size}
+    
+    # 设置硬件断点
+    if hasattr(dbg, 'setHardwareBreakpoint'):
+        result = dbg.setHardwareBreakpoint(addr, bp_type, bp_size)
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','type':'{break_type}','size':{size},'result':result}}")
+    else:
+        # 尝试通过命令设置
+        result = dbgcmd(f'hwbp {{addr}}, {{bp_type}}, {{bp_size}}')
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','type':'{break_type}','size':{size},'result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(hwbp_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"设置硬件断点失败: {str(e)}"
+            }
+    
+    def remove_hardware_breakpoint(self, address: str) -> Dict[str, Any]:
+        """删除硬件断点"""
+        address = address.strip().replace(" ", "")
+        return self.execute_command(f"hwbpdel {address}")
+    
+    def set_watchpoint(self, address: str, watch_type: str = "write", size: int = 4) -> Dict[str, Any]:
+        """
+        设置数据断点（监视点）
+        
+        :param address: 监视地址
+        :param watch_type: 监视类型，可选值:
+            - "write" 或 "w": 写入时触发
+            - "read" 或 "r": 读取时触发
+            - "readwrite" 或 "rw": 读写时触发
+        :param size: 监视大小（字节），可选值: 1, 2, 4, 8
+        """
+        address = address.strip().replace(" ", "")
+        
+        # 数据断点实际上就是硬件断点的特殊类型
+        if watch_type.lower() in ["read", "r"]:
+            return self.set_hardware_breakpoint(address, "read", size)
+        elif watch_type.lower() in ["readwrite", "rw"]:
+            return self.set_hardware_breakpoint(address, "readwrite", size)
+        else:
+            return self.set_hardware_breakpoint(address, "write", size)
+    
+    def remove_watchpoint(self, address: str) -> Dict[str, Any]:
+        """删除数据断点（监视点）"""
+        return self.remove_hardware_breakpoint(address)
+    
+    def attach_process(self, process_id: int) -> Dict[str, Any]:
+        """
+        附加到进程
+        
+        :param process_id: 进程ID（PID）
+        """
+        try:
+            attach_script = f"""# X64Dbg Attach Process Script
+try:
+    import dbg
+    pid = {process_id}
+    
+    # 附加到进程
+    if hasattr(dbg, 'attachProcess'):
+        result = dbg.attachProcess(pid)
+        print(f"MCP_RESULT:{{'status':'success','pid':{process_id},'result':result}}")
+    else:
+        # 尝试通过命令附加
+        result = dbgcmd(f'attach {{pid}}')
+        print(f"MCP_RESULT:{{'status':'success','pid':{process_id},'result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(attach_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"附加进程失败: {str(e)}"
+            }
+    
+    def detach_process(self) -> Dict[str, Any]:
+        """分离当前调试的进程"""
+        return self.execute_command("detach")
+    
+    def apply_patch(self, address: str, data: str, description: str = "") -> Dict[str, Any]:
+        """
+        应用代码补丁
+        
+        :param address: 补丁地址
+        :param data: 要写入的数据（十六进制字符串，如: "90 90 90"）
+        :param description: 补丁描述（可选）
+        """
+        address = address.strip().replace(" ", "")
+        
+        try:
+            patch_script = f"""# X64Dbg Apply Patch Script
+try:
+    import dbg
+    addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    patch_data = bytes.fromhex('{data.replace(' ', '')}')
+    desc = '{description}'
+    
+    # 应用补丁
+    if hasattr(dbg, 'setPatch'):
+        result = dbg.setPatch(addr, patch_data, desc)
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','data':'{data}','description':'{description}','result':result}}")
+    else:
+        # 先写入内存，然后标记为补丁
+        dbg.write(addr, patch_data)
+        result = dbgcmd(f'patch {{addr}}, {{desc}}')
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','data':'{data}','description':'{description}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(patch_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"应用补丁失败: {str(e)}"
+            }
+    
+    def remove_patch(self, address: str) -> Dict[str, Any]:
+        """
+        移除代码补丁（恢复原始代码）
+        
+        :param address: 补丁地址
+        """
+        address = address.strip().replace(" ", "")
+        
+        try:
+            remove_patch_script = f"""# X64Dbg Remove Patch Script
+try:
+    import dbg
+    addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    
+    # 移除补丁
+    if hasattr(dbg, 'removePatch'):
+        result = dbg.removePatch(addr)
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','result':result}}")
+    else:
+        result = dbgcmd(f'patchdel {{addr}}')
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(remove_patch_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"移除补丁失败: {str(e)}"
+            }
+    
+    def get_patches(self) -> Dict[str, Any]:
+        """获取所有补丁列表"""
+        return self.execute_command("patchlist")
 
 
 # 全局控制器实例
@@ -1188,4 +1383,166 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"获取内存保护失败: {str(e)}"}
+    
+    # ========== 中优先级新功能 ==========
+    
+    @mcp.tool('x64dbg_set_hardware_breakpoint', description='设置硬件断点')
+    async def set_hardware_breakpoint(address: str, break_type: str = "execute", size: int = 1):
+        """
+        设置硬件断点
+        
+        :param address: 断点地址，十六进制格式(0x401000)
+        :param break_type: 断点类型，可选值: "execute"/"e"（执行）, "write"/"w"（写入）, "read"/"r"（读取）, "readwrite"/"rw"（读写）
+        :param size: 断点大小（字节），可选值: 1, 2, 4, 8，默认1
+        :return: 设置结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        if size not in [1, 2, 4, 8]:
+            raise ValueError('断点大小必须是1、2、4或8字节!')
+        
+        try:
+            result = controller.set_hardware_breakpoint(address, break_type, size)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"设置硬件断点失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_remove_hardware_breakpoint', description='删除硬件断点')
+    async def remove_hardware_breakpoint(address: str):
+        """
+        删除硬件断点
+        
+        :param address: 断点地址，十六进制格式(0x401000)
+        :return: 删除结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        try:
+            result = controller.remove_hardware_breakpoint(address)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"删除硬件断点失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_set_watchpoint', description='设置数据断点（监视点）')
+    async def set_watchpoint(address: str, watch_type: str = "write", size: int = 4):
+        """
+        设置数据断点（监视点），用于监控内存访问
+        
+        :param address: 监视地址，十六进制格式(0x401000)
+        :param watch_type: 监视类型，可选值: "write"/"w"（写入）, "read"/"r"（读取）, "readwrite"/"rw"（读写）
+        :param size: 监视大小（字节），可选值: 1, 2, 4, 8，默认4
+        :return: 设置结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        if size not in [1, 2, 4, 8]:
+            raise ValueError('监视大小必须是1、2、4或8字节!')
+        
+        try:
+            result = controller.set_watchpoint(address, watch_type, size)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"设置数据断点失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_remove_watchpoint', description='删除数据断点（监视点）')
+    async def remove_watchpoint(address: str):
+        """
+        删除数据断点（监视点）
+        
+        :param address: 监视地址，十六进制格式(0x401000)
+        :return: 删除结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        try:
+            result = controller.remove_watchpoint(address)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"删除数据断点失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_attach_process', description='附加到进程')
+    async def attach_process(process_id: int):
+        """
+        附加到正在运行的进程进行调试
+        
+        :param process_id: 进程ID（PID）
+        :return: 附加结果
+        """
+        if process_id <= 0:
+            raise ValueError('进程ID必须大于0!')
+        
+        try:
+            result = controller.attach_process(process_id)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"附加进程失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_detach_process', description='分离当前调试的进程')
+    async def detach_process():
+        """
+        分离当前调试的进程（不断点终止进程）
+        
+        :return: 分离结果
+        """
+        try:
+            result = controller.detach_process()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"分离进程失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_apply_patch', description='应用代码补丁')
+    async def apply_patch(address: str, data: str, description: str = ""):
+        """
+        应用代码补丁（修改代码）
+        
+        :param address: 补丁地址，十六进制格式(0x401000)
+        :param data: 要写入的数据，十六进制字符串（如: "90 90 90" 表示NOP指令）
+        :param description: 补丁描述（可选）
+        :return: 应用结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        if not data or data.strip() == "":
+            raise ValueError('数据不能为空!')
+        
+        try:
+            result = controller.apply_patch(address, data, description)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"应用补丁失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_remove_patch', description='移除代码补丁')
+    async def remove_patch(address: str):
+        """
+        移除代码补丁（恢复原始代码）
+        
+        :param address: 补丁地址，十六进制格式(0x401000)
+        :return: 移除结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        try:
+            result = controller.remove_patch(address)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"移除补丁失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_patches', description='获取所有补丁列表')
+    async def get_patches():
+        """
+        获取当前应用的所有补丁列表
+        
+        :return: 补丁列表
+        """
+        try:
+            result = controller.get_patches()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取补丁列表失败: {str(e)}"}
 
