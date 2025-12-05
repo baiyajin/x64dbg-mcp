@@ -3,9 +3,14 @@
 负责创建和执行x64dbg Python脚本
 """
 import os
+import sys
 import tempfile
+import logging
 from typing import Dict, Any
 from .result_parser import ResultParser
+
+# 使用logger而不是print，避免干扰MCP协议
+logger = logging.getLogger(__name__)
 
 
 class ScriptExecutor:
@@ -26,7 +31,9 @@ class ScriptExecutor:
             try:
                 os.makedirs(self.temp_script_dir, exist_ok=True)
             except Exception as e:
-                print(f"警告: 无法创建临时脚本目录: {e}")
+                # 使用stderr输出警告，避免干扰MCP协议的stdout JSON通信
+                print(f"警告: 无法创建临时脚本目录: {e}", file=sys.stderr)
+                logger.warning(f"无法创建临时脚本目录: {e}，将使用系统临时目录")
                 self.temp_script_dir = tempfile.gettempdir()
     
     def create_script_file(self, script_content: str) -> str:

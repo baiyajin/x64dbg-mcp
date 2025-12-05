@@ -15,17 +15,18 @@ if hasattr(stdin, 'reconfigure'):
 if hasattr(stdout, 'reconfigure'):
     stdout.reconfigure(encoding='utf-8')
 
-# 配置日志
+# 配置日志 - 输出到stderr，避免干扰MCP协议的stdout JSON通信
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,  # 只记录警告和错误，减少输出
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(sys.stdout)
+        logging.StreamHandler(sys.stderr)  # 使用stderr而不是stdout
     ]
 )
 logger = logging.getLogger(__name__)
 
 # 创建FastMCP实例
+# 注意：FastMCP的启动横幅会输出到stdout，但这是正常的MCP协议行为
 mcp = FastMCP(
     "X64Dbg-MCP-Server",
     instructions='X64Dbg MCP服务，用于AI辅助逆向分析和调试',
@@ -35,11 +36,13 @@ mcp = FastMCP(
 # 注册工具
 try:
     register_tools(mcp)
-    logger.info("X64Dbg工具注册成功")
+    # 不输出到stdout，避免干扰MCP协议
+    # logger.info("X64Dbg工具注册成功")
 except Exception as e:
-    logger.error(f"工具注册失败: {e}")
+    logger.error(f"工具注册失败: {e}", exc_info=True)
 
 if __name__ == "__main__":
-    logger.info("启动X64Dbg MCP服务器...")
+    # 不输出到stdout，避免干扰MCP协议
+    # logger.info("启动X64Dbg MCP服务器...")
     mcp.run()
 
