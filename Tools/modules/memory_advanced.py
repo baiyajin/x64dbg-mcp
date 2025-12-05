@@ -70,6 +70,7 @@ except Exception as e:
         compare_script = f"""# X64Dbg Memory Compare Script
 try:
     import dbg
+    import json
     addr1 = int('{address1}', 16) if '{address1}'.startswith('0x') else int('{address1}')
     addr2 = int('{address2}', 16) if '{address2}'.startswith('0x') else int('{address2}')
     size = {size}
@@ -80,21 +81,24 @@ try:
     differences = []
     for i in range(size):
         if mem1[i] != mem2[i]:
-            differences.append({{
-                'offset': i,
-                'address1': hex(addr1 + i),
-                'address2': hex(addr2 + i),
-                'value1': hex(mem1[i]),
-                'value2': hex(mem2[i])
-            }})
+            diff_dict = dict()
+            diff_dict['offset'] = i
+            diff_dict['address1'] = hex(addr1 + i)
+            diff_dict['address2'] = hex(addr2 + i)
+            diff_dict['value1'] = hex(mem1[i])
+            diff_dict['value2'] = hex(mem2[i])
+            differences.append(diff_dict)
     
-    result = {{
-        'identical': len(differences) == 0,
-        'total_bytes': size,
-        'differences_count': len(differences),
-        'differences': differences[:100]
-    }}
-    print(f"MCP_RESULT:{{'status':'success','result':{{result}}}}")
+    result = dict()
+    result['identical'] = len(differences) == 0
+    result['total_bytes'] = size
+    result['differences_count'] = len(differences)
+    result['differences'] = differences[:100]
+    
+    final_result = dict()
+    final_result['status'] = 'success'
+    final_result['result'] = result
+    print("MCP_RESULT:" + json.dumps(final_result))
 except Exception as e:
     print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
 """
@@ -116,7 +120,9 @@ try:
     fill_data = bytes([fill_value] * size)
     dbg.write(addr, fill_data)
     
-    print(f"MCP_RESULT:{{'status':'success','address':'{address}','size':{size},'value':{value}}")
+    import json
+    result_dict = {{'status':'success','address':'{address}','size':{size},'value':{value}}}
+    print("MCP_RESULT:" + json.dumps(result_dict))
 except Exception as e:
     print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
 """
