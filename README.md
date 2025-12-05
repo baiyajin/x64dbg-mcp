@@ -753,7 +753,7 @@ Tools/
 遇到问题需要帮助？欢迎加入付费技术支持咨询交流QQ群，与开发者和其他用户交流！
 
 <div align="center">
-  <img src="qrcode_1764927240627.jpg" alt="付费技术支持咨询交流QQ群" width="300">
+  <img src="qq_group.jpg" alt="付费技术支持咨询交流QQ群" width="300">
   <p><em>扫码加入QQ群，获取技术支持 💬</em></p>
 </div>
 
