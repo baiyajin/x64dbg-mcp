@@ -1,5 +1,9 @@
 # X64Dbg MCP Server
 
+<div align="center">
+  <img src="logo.png" alt="X64Dbg MCP Logo" width="200">
+</div>
+
 X64Dbg的Model Context Protocol服务器，用于AI辅助逆向分析和调试。
 
 ## 功能特性
