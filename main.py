@@ -35,7 +35,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 创建FastMCP实例
-# 注意：FastMCP的启动横幅会输出到stdout，但这是正常的MCP协议行为
+# 注意：FastMCP的启动横幅会输出到stderr，这是FastMCP库的正常行为
+# 这些输出被Cursor标记为[error]但实际上不是错误，只是FastMCP的正常启动信息
 mcp = FastMCP(
     "X64Dbg-MCP-Server",
     instructions='X64Dbg MCP服务，用于AI辅助逆向分析和调试',
@@ -53,5 +54,7 @@ except Exception as e:
 if __name__ == "__main__":
     # 不输出到stdout，避免干扰MCP协议
     # logger.info("启动X64Dbg MCP服务器...")
-    mcp.run()
+    # 设置log_level为ERROR以减少FastMCP的日志输出
+    # 注意：FastMCP的启动横幅仍会输出到stderr，这是库的正常行为
+    mcp.run(log_level='ERROR')
 
