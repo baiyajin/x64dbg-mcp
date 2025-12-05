@@ -1349,6 +1349,112 @@ except Exception as e:
                 "status": "error",
                 "message": f"地址格式化失败: {str(e)}"
             }
+    
+    # ========== 书签功能 ==========
+    
+    def add_bookmark(self, address: str, name: str = "") -> Dict[str, Any]:
+        """
+        添加地址书签
+        
+        :param address: 地址
+        :param name: 书签名称（可选，如果不提供则使用地址作为名称）
+        """
+        address = address.strip().replace(" ", "")
+        if not name:
+            name = address
+        
+        try:
+            bookmark_script = f"""# X64Dbg Bookmark Script
+try:
+    import dbg
+    addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    bookmark_name = '{name}'
+    
+    # 添加书签
+    if hasattr(dbg, 'setBookmark'):
+        result = dbg.setBookmark(addr, bookmark_name)
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','name':'{name}','result':result}}")
+    else:
+        # 尝试通过命令添加
+        result = dbgcmd(f'bookmark {{addr}}, {{bookmark_name}}')
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','name':'{name}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(bookmark_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"添加书签失败: {str(e)}"
+            }
+    
+    def remove_bookmark(self, address: str) -> Dict[str, Any]:
+        """
+        删除地址书签
+        
+        :param address: 地址
+        """
+        address = address.strip().replace(" ", "")
+        
+        try:
+            remove_script = f"""# X64Dbg Remove Bookmark Script
+try:
+    import dbg
+    addr = int('{address}', 16) if '{address}'.startswith('0x') else int('{address}')
+    
+    # 删除书签
+    if hasattr(dbg, 'removeBookmark'):
+        result = dbg.removeBookmark(addr)
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','result':result}}")
+    else:
+        result = dbgcmd(f'bookmarkdel {{addr}}')
+        print(f"MCP_RESULT:{{'status':'success','address':'{address}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(remove_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"删除书签失败: {str(e)}"
+            }
+    
+    def get_bookmarks(self) -> Dict[str, Any]:
+        """获取所有书签列表"""
+        return self.execute_command("bookmarklist")
+    
+    def goto_bookmark(self, name: str) -> Dict[str, Any]:
+        """
+        跳转到书签
+        
+        :param name: 书签名称
+        """
+        try:
+            goto_script = f"""# X64Dbg Goto Bookmark Script
+try:
+    import dbg
+    bookmark_name = '{name}'
+    
+    # 获取书签地址并跳转
+    if hasattr(dbg, 'getBookmarkAddress'):
+        addr = dbg.getBookmarkAddress(bookmark_name)
+        if addr:
+            dbg.setRegister('EIP', addr)
+            print(f"MCP_RESULT:{{'status':'success','name':'{name}','address':hex(addr)}}")
+        else:
+            print(f"MCP_RESULT:{{'status':'error','error':'书签不存在'}}")
+    else:
+        result = dbgcmd(f'bookmarkgoto {{bookmark_name}}')
+        print(f"MCP_RESULT:{{'status':'success','name':'{name}','result':result}}")
+except Exception as e:
+    print(f"MCP_RESULT:{{'status':'error','error':str(e)}}")
+"""
+            return self.execute_script_auto(goto_script)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"跳转书签失败: {str(e)}"
+            }
 
 
 # 全局控制器实例
@@ -2419,4 +2525,71 @@ def register_tools(mcp):
             return result
         except Exception as e:
             return {"status": "error", "message": f"地址格式化失败: {str(e)}"}
+    
+    # ========== 书签功能 ==========
+    
+    @mcp.tool('x64dbg_add_bookmark', description='添加地址书签')
+    async def add_bookmark(address: str, name: str = ""):
+        """
+        添加地址书签
+        
+        :param address: 地址，十六进制格式(0x401000)
+        :param name: 书签名称（可选，如果不提供则使用地址作为名称）
+        :return: 添加结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        try:
+            result = controller.add_bookmark(address, name)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"添加书签失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_remove_bookmark', description='删除地址书签')
+    async def remove_bookmark(address: str):
+        """
+        删除地址书签
+        
+        :param address: 地址，十六进制格式(0x401000)
+        :return: 删除结果
+        """
+        if not address or address.strip() == "":
+            raise ValueError('地址不能为空!')
+        
+        try:
+            result = controller.remove_bookmark(address)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"删除书签失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_get_bookmarks', description='获取所有书签列表')
+    async def get_bookmarks():
+        """
+        获取所有书签列表
+        
+        :return: 书签列表
+        """
+        try:
+            result = controller.get_bookmarks()
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"获取书签列表失败: {str(e)}"}
+    
+    @mcp.tool('x64dbg_goto_bookmark', description='跳转到书签')
+    async def goto_bookmark(name: str):
+        """
+        跳转到书签（设置EIP到书签地址）
+        
+        :param name: 书签名称
+        :return: 跳转结果
+        """
+        if not name or name.strip() == "":
+            raise ValueError('书签名称不能为空!')
+        
+        try:
+            result = controller.goto_bookmark(name)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": f"跳转书签失败: {str(e)}"}
 
